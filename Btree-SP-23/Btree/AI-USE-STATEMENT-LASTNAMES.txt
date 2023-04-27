@@ -1,0 +1,22 @@
+CSE 132C Project 2 Spring 2023
+Language Model Usage Statement 
+
+First Name:
+Last Name:
+Student ID:
+
+First Name:
+Last Name:
+Student ID:
+
+Did you use any LLM-based tools such as GitHub's Copilot or ChatGPT during this project?
+
+Tools that you used (enter N/A if none):
+
+Provide description of how you used it\them:
+
+Did you find the tool helpful?
+
+Did using the tool detract from your learning experience in any way?
+
+
