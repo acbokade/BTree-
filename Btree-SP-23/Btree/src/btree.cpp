@@ -24,6 +24,9 @@ namespace badgerdb
 
 	const int IDEAL_OCCUPANCY = 1;
 
+	const int INVALID_KEY = INT_MIN;
+	const int INVALID_PAGE = INT_MIN;
+
 	// -----------------------------------------------------------------------------
 	// BTreeIndex::BTreeIndex -- Constructor
 	// -----------------------------------------------------------------------------
@@ -139,13 +142,23 @@ namespace badgerdb
 			// Set root node members
 			// Root page is initially leaf node
 			// Cast root page to leaf node
-			if (this->attributeType == Datatype::INTEGER) {
-				LeafNodeInt* rootLeafNode = (LeafNodeInt*) rootPage;
+			if (this->attributeType == Datatype::INTEGER)
+			{
+				LeafNodeInt *rootLeafNode = (LeafNodeInt *)rootPage;
 				rootLeafNode->len = 0;
-				for(int i=0;i<this->leafOccupancy;i++) {
-					rootLeafNode->keyArray[i] = -1;
-				}
-				rootLeafNode->rightSibPageNo = -1;
+				rootLeafNode->rightSibPageNo = INVALID_PAGE;
+			}
+			else if (this->attributeType == Datatype::DOUBLE)
+			{
+				LeafNodeDouble *rootLeafNode = (LeafNodeDouble *)rootPage;
+				rootLeafNode->len = 0;
+				rootLeafNode->rightSibPageNo = INVALID_PAGE;
+			}
+			else if (this->attributeType == Datatype::STRING)
+			{
+				LeafNodeString *rootLeafNode = (LeafNodeString *)rootPage;
+				rootLeafNode->len = 0;
+				rootLeafNode->rightSibPageNo = INVALID_PAGE;
 			}
 			FileScan fscan(relationName, bufMgr);
 			try
@@ -156,20 +169,23 @@ namespace badgerdb
 					fscan.scanNext(scanRid);
 					std::string recordStr = fscan.getRecord();
 					const char *record = recordStr.c_str();
-					void *key = nullptr;
 					if (this->attributeType == Datatype::INTEGER)
 					{
-						key = ((int *)(record + attrByteOffset));
+						int *key = ((int *)(record + attrByteOffset));
+						this->insertEntry((void *)key, scanRid);
 					}
 					else if (this->attributeType == Datatype::DOUBLE)
 					{
-						key = ((double *)(record + attrByteOffset));
+						double *key = ((double *)(record + attrByteOffset));
+						this->insertEntry((void *)key, scanRid);
 					}
 					else if (this->attributeType == Datatype::STRING)
 					{
-						key = ((char *)(record + attrByteOffset));
+						const char *key = ((char *)(record + attrByteOffset));
+						std::string key_str(key);
+						std::string actualIndexKeyValue = key_str.substr(0, STRINGSIZE);
+						this->insertEntry((void *)&actualIndexKeyValue, scanRid);
 					}
-					this->insertEntry((void *)key, scanRid);
 				}
 			}
 			catch (EndOfFileException e)
@@ -382,17 +398,18 @@ namespace badgerdb
 			// Case 2: Root is non-leaf
 			bool isSplit = false;
 			void *splitKey = nullptr;
+			PageId splitRightNodePageId;
 			if (this->attributeType == Datatype::INTEGER)
 			{
-				insertRecursive(0, rootPageId, key, rid, isSplit, splitKey);
+				insertRecursive(0, rootPageId, key, rid, isSplit, splitKey, splitRightNodePageId);
 			}
 			else if (this->attributeType == Datatype::DOUBLE)
 			{
-				insertRecursive(0, rootPageId, key, rid, isSplit, splitKey);
+				insertRecursive(0, rootPageId, key, rid, isSplit, splitKey, splitRightNodePageId);
 			}
 			else if (this->attributeType == Datatype::STRING)
 			{
-				insertRecursive(0, rootPageId, key, rid, isSplit, splitKey);
+				insertRecursive(0, rootPageId, key, rid, isSplit, splitKey, splitRightNodePageId);
 			}
 		}
 	}
@@ -707,17 +724,55 @@ namespace badgerdb
 
 	const void BTreeIndex::scanNext(RecordId &outRid)
 	{
-		// Cast the curPage to leaf page node
+		if (!scanExecuting)
+		{
+			throw ScanNotInitializedException();
+		}
+		// Check if nextEntry is valid or not (points to valid entry in the page or not)
+		if (this->nextEntry == INT_MIN)
+		{
+			throw IndexScanCompletedException();
+		}
 		if (this->attributeType == Datatype::INTEGER)
 		{
+			// Cast the curPage to leaf page node
 			LeafNodeInt *curLeafNode = (LeafNodeInt *)this->currentPageData;
+			// Read the nextEntry, its valid now since we are validating it in the function start
+			const RecordId entryRid = curLeafNode->ridArray[nextEntry];
+			outRid = entryRid;
+			// Update the nextEntry member
 			if (this->nextEntry < curLeafNode->len)
 			{
-				// Fetch the record from this entry
-				outRid = curLeafNode->ridArray[nextEntry];
+				// Fetch the record from this page
+				// Check if the nextEntry matches the scan criteria
+				if (this->highOp == LT)
+				{
+					if (curLeafNode->keyArray[nextEntry] >= this->highValInt)
+					{
+						// Reached the end of the scan
+						nextEntry = INT_MIN;
+					}
+					else
+					{
+						nextEntry += 1;
+					}
+				}
+				else if (this->highOp == LTE)
+				{
+					if (curLeafNode->keyArray[nextEntry] > this->highValInt)
+					{
+						// Reached the end of the scan
+						nextEntry = INT_MIN;
+					}
+					else
+					{
+						nextEntry += 1;
+					}
+				}
 			}
 			else
 			{
+				// Reached the end of the current page, need to read the sibling page
 				if (curLeafNode->rightSibPageNo == -1)
 				{
 					// Reached the end
@@ -731,10 +786,41 @@ namespace badgerdb
 				this->bufMgr->readPage(this->file, this->currentPageNum, this->currentPageData);
 				// Cast the page to leaf node
 				curLeafNode = (LeafNodeInt *)this->currentPageData;
+				// Check if the first entry of the new sibling page is valid or not as per scan critiera
+				if (this->highOp == LT)
+				{
+					if (curLeafNode->keyArray[0] >= this->highValInt)
+					{
+						// Reached the end of the scan
+						nextEntry = INT_MIN;
+					}
+					else
+					{
+						nextEntry = 0;
+					}
+				}
+				else if (this->highOp == LTE)
+				{
+					if (curLeafNode->keyArray[0] > this->highValInt)
+					{
+						// Reached the end of the scan
+						nextEntry = INT_MIN;
+					}
+					else
+					{
+						nextEntry = 0;
+					}
+				}
 				outRid = curLeafNode->ridArray[0];
 				// Move to the next sibling
 				this->nextEntry = 1;
 			}
+		}
+		else if (this->attributeType == Datatype::DOUBLE)
+		{
+		}
+		else if (this->attributeType == Datatype::STRING)
+		{
 		}
 	}
 

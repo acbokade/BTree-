@@ -277,6 +277,7 @@ namespace badgerdb
      * This linking of leaves allows to easily move from one leaf to the next leaf during index scan.
      */
     PageId rightSibPageNo;
+    int len;
   };
 
   /**
@@ -299,6 +300,7 @@ namespace badgerdb
      * This linking of leaves allows to easily move from one leaf to the next leaf during index scan.
      */
     PageId rightSibPageNo;
+    int len;
   };
 
   /**
