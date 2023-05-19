@@ -26,6 +26,7 @@ namespace badgerdb
 
 	const int INVALID_KEY = INT_MIN;
 	const int INVALID_PAGE = INT_MIN;
+	const int INVALID_KEY_INDEX = INT_MIN;
 
 	// -----------------------------------------------------------------------------
 	// BTreeIndex::BTreeIndex -- Constructor
@@ -90,6 +91,7 @@ namespace badgerdb
 		this->treeLevel = 0;
 		this->bufMgr = bufMgrIn;
 		this->scanExecuting = false;
+		this->nextEntry = INVALID_KEY_INDEX;
 
 		// Assign buffer manager
 		if (indexFileExists)
@@ -649,6 +651,14 @@ namespace badgerdb
 		{
 			this->endScan();
 		}
+		if (lowOpParm == Operator::LT || lowOpParm == Operator::LTE)
+		{
+			throw BadOpcodesException();
+		}
+		if (highOpParm == Operator::GT || highOpParm == Operator::GTE)
+		{
+			throw BadOpcodesException();
+		}
 		this->scanExecuting = true;
 		if (this->attributeType == Datatype::INTEGER)
 		{
@@ -667,10 +677,21 @@ namespace badgerdb
 				LeafNodeInt *rootLeafNode = (LeafNodeInt *)rootPage;
 				for (int i = 0; i < rootLeafNode->len; i++)
 				{
-					if (rootLeafNode->keyArray[i] >= lowIntValue)
+					if (lowOpParm == Operator::GT && rootLeafNode->keyArray[i] > lowIntValue)
 					{
 						this->nextEntry = i;
+						break;
 					}
+					if (lowOpParm == Operator::GTE && rootLeafNode->keyArray[i] >= lowIntValue)
+					{
+						this->nextEntry = i;
+						break;
+					}
+				}
+				// If the nextEntry is still not set, it means no keys match the scan criteria
+				if (this->nextEntry == INVALID_KEY_INDEX)
+				{
+					throw NoSuchKeyFoundException();
 				}
 			}
 			else
@@ -681,40 +702,83 @@ namespace badgerdb
 				{
 					Page *curPage;
 					bufMgr->readPage(this->file, curPageNum, curPage);
-					// Unpin all the pages except the leaf page
+					// Unpin each page except the leaf page
 					if (curLevel != this->treeLevel)
 					{
 						bufMgr->unPinPage(this->file, curPageNum, false);
 					}
 					if (curLevel != this->treeLevel)
 					{
+						// Cast to non leaf node
 						NonLeafNodeInt *curNonLeafNode = (NonLeafNodeInt *)curPageNum;
+						bool nextKeyFound = false;
 						for (int i = 0; i < curNonLeafNode->len; i++)
 						{
-							if (curNonLeafNode->keyArray[i] >= lowIntValue)
+							// For both GT and GTE operator, need to find first key index
+							// which is greater than lowIntValue (convention: left child node
+							// contains keys strictly less than key of parent node and right child
+							// node contains keys greater than or equal to parent node key)
+							if (curNonLeafNode->keyArray[i] > lowIntValue)
 							{
 								curPageNum = curNonLeafNode->pageNoArray[i];
+								nextKeyFound = true;
 								break;
 							}
+						}
+						if (!nextKeyFound)
+						{
+							// It means the next page should be the last index of pageNoArray
+							curPageNum = curNonLeafNode->pageNoArray[curNonLeafNode->len];
 						}
 					}
 					else
 					{
 						// Reached the leaf node
 						LeafNodeInt *curLeafNode = (LeafNodeInt *)curPageNum;
-						for (int i = 0; i < this->leafOccupancy; i++)
+						// Iterate over the leaf nodes and its siblings until a key is found satisfying the criteria
+						// or the end of index is reached
+						while (true)
 						{
-							if (curLeafNode->keyArray[i] >= lowIntValue)
+							// Scan current page
+							// Its possible that current page doesn't contain any satisfying key, in which case
+							// move to next sibling (eg 10, 11, 12 are the keys in current page and lowIntValue - 14)
+							bool satisfyingKeyFound = false;
+							for (int i = 0; i < curLeafNode->len; i++)
 							{
-								this->nextEntry = i;
-								this->currentPageData = curPage;
-								break;
+								if (curLeafNode->keyArray[i] >= lowIntValue)
+								{
+									this->nextEntry = i;
+									this->currentPageData = curPage;
+									satisfyingKeyFound = true;
+									break;
+								}
+							}
+							if (!satisfyingKeyFound)
+							{
+								// Unpin current page
+								PageId nextPageNo = curLeafNode->rightSibPageNo;
+								bufMgr->unPinPage(this->file, curPageNum, false);
+								curPageNum = nextPageNo;
+								if (nextPageNo == INVALID_PAGE)
+								{
+									throw NoSuchKeyFoundException();
+								}
+								bufMgr->readPage(this->file, curPageNum, curPage);
+								curLeafNode = (LeafNodeInt *)curPage;
 							}
 						}
 					}
 					curLevel += 1;
 				}
 			}
+		}
+		else if (this->attributeType == Datatype::DOUBLE)
+		{
+			// Complete TODO
+		}
+		else if (this->attributeType == Datatype::STRING)
+		{
+			// Complete TODO
 		}
 	}
 
@@ -836,6 +900,6 @@ namespace badgerdb
 		}
 		this->scanExecuting = false;
 		// Unpin all the pages that were pinned
-		this->bufMgr->unPinPage(this->file, this->currentPageNum, false);
+		this->bufMgr->unPinPage(this->file, this->currentPageNum, true);
 	}
 }
