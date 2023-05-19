@@ -453,20 +453,23 @@ namespace badgerdb
      **/
     const void insertEntry(const void *key, const RecordId rid);
 
-    const void insertRecursive(int level, PageId nodePageNumber, const void *key, const RecordId rid, bool &isSplit, void *splitKey, PageId& splitRightNodePageId);
+    const void insertRecursive(int level, PageId nodePageNumber, const void *key, const RecordId rid, bool &isSplit, void *splitKey, PageId &splitRightNodePageId);
 
-    const void insertLeaf(PageId pageNum, const void *key, const RecordId rid, bool &isSplit, void *splitKey, PageId& splitRightNodePageId);
+    const void insertLeaf(PageId pageNum, const void *key, const RecordId rid, bool &isSplit, void *splitKey, PageId &splitRightNodePageId);
 
-    const void insertNonLeaf(PageId nodePageNumber, const void *middleKey, bool& isSplit, void* splitKey, PageId& splitRightNodePageId);
-
-    template <typename T>
-  	void insertKeyRidToKeyRidArray(T keyArray[], RecordId ridArray[], int len, T key, const RecordId rid);
+    const void insertNonLeaf(PageId nodePageNumber, const void *middleKey, bool &isSplit, void *splitKey, PageId &splitRightNodePageId);
 
     template <typename T>
-    bool hasSpaceInLeafNode(T* leafNode);
+    void insertKeyRidToKeyRidArray(T keyArray[], RecordId ridArray[], int len, T key, const RecordId rid);
 
     template <typename T>
-    bool hasSpaceInNonLeafNode(T* nonLeafNode);
+    bool hasSpaceInLeafNode(T *leafNode);
+
+    template <typename T>
+    bool hasSpaceInNonLeafNode(T *nonLeafNode);
+
+    template <typename T>
+    void insertKeyPageIdToKeyPageIdArray(T keyArray[], PageId pageNoArray[], int len, T key, PageId pageNo);
 
     /**
      * Begin a filtered scan of the index.  For instance, if the method is called

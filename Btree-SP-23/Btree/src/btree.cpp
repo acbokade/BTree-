@@ -7,6 +7,7 @@
 
 #include "btree.h"
 #include "filescan.h"
+#include <algorithm>
 #include "exceptions/bad_index_info_exception.h"
 #include "exceptions/bad_opcodes_exception.h"
 #include "exceptions/bad_scanrange_exception.h"
@@ -21,7 +22,7 @@
 namespace badgerdb
 {
 
-	const int IDEAL_OCCUPANCY = 0.67;
+	const int IDEAL_OCCUPANCY = 1;
 
 	// -----------------------------------------------------------------------------
 	// BTreeIndex::BTreeIndex -- Constructor
@@ -81,11 +82,11 @@ namespace badgerdb
 		this->attrByteOffset = attrByteOffset;
 		this->setLeafOccupancy(attrType);
 		this->setNodeOccupancy(attrType);
-		this->headerPageNum = 0;
-		this->rootPageNum = 1;
+		this->headerPageNum = 1;
 		this->isRootLeaf = true;
 		this->treeLevel = 0;
-		this->bufMgr = bufMgr;
+		this->bufMgr = bufMgrIn;
+		this->scanExecuting = false;
 
 		// Assign buffer manager
 		if (indexFileExists)
@@ -94,24 +95,58 @@ namespace badgerdb
 			// Find out the meta page of the index file
 			// Meta page is always the first page of the index file
 			BlobFile indexFile = BlobFile::open(indexName);
-			this->file = &indexFile;
+			this->file = (File *)&indexFile;
 			PageId metaPageId = this->headerPageNum;
-			Page metaPage = indexFile.readPage(metaPageId);
+			Page *metaPage;
+			this->bufMgr->readPage(this->file, metaPageId, metaPage);
+			// Unpin the page since the page won't be used for writing here after
+			this->bufMgr->unPinPage(this->file, metaPageId, metaPage);
 			// Cast meta page to IndexMetaInfo
-			IndexMetaInfo *indexMetaInfo = (IndexMetaInfo *)(&metaPage);
+			IndexMetaInfo *indexMetaInfo = (IndexMetaInfo *)(metaPage);
+			// Set the root page id
+			this->rootPageNum = indexMetaInfo->rootPageNo;
 			// Values in metapage (relationName, attribute byte offset, attribute type etc.) must match
-			bool relationNameMatch = indexMetaInfo->relationName == relationName;
+			bool relationNameMatch = std::string(indexMetaInfo->relationName) == relationName;
 			bool attributeByteOffsetMatch = indexMetaInfo->attrByteOffset == attrByteOffset;
 			bool attrTypeMatch = indexMetaInfo->attrType == attrType;
 			if (!(relationNameMatch && attributeByteOffsetMatch && attrTypeMatch))
 			{
-				throw BadIndexInfoException("Parameters don't match");
+				throw BadIndexInfoException("Parameters passed while creating the index don't match");
 			}
 		}
 		else
 		{
 			// Create the blob file for the index
 			this->file = &BlobFile::create(indexName);
+			// Create pages for metadata and root (page 1 and 2 repectively)
+			PageId metaPageNo;
+			Page *metaPage;
+			PageId rootPageNo;
+			Page *rootPage;
+			this->bufMgr->allocPage(this->file, metaPageNo, metaPage);
+			this->headerPageNum = metaPageNo;
+			// Cast the metaPage into the IndexMetaInfo
+			IndexMetaInfo *indexMetaInfo = (IndexMetaInfo *)metaPage;
+			this->bufMgr->allocPage(this->file, rootPageNo, rootPage);
+			// Write meta data to the meta page
+			indexMetaInfo->attrType = attributeType;
+			indexMetaInfo->attrByteOffset = attrByteOffset;
+			strcpy(indexMetaInfo->relationName, relationName.c_str());
+			indexMetaInfo->rootPageNo = rootPageNo;
+			// Meta page is modified now, we can unpin this page which will result in disk flushing
+			this->bufMgr->unPinPage(this->file, metaPageNo, true);
+
+			// Set root node members
+			// Root page is initially leaf node
+			// Cast root page to leaf node
+			if (this->attributeType == Datatype::INTEGER) {
+				LeafNodeInt* rootLeafNode = (LeafNodeInt*) rootPage;
+				rootLeafNode->len = 0;
+				for(int i=0;i<this->leafOccupancy;i++) {
+					rootLeafNode->keyArray[i] = -1;
+				}
+				rootLeafNode->rightSibPageNo = -1;
+			}
 			FileScan fscan(relationName, bufMgr);
 			try
 			{
@@ -158,6 +193,7 @@ namespace badgerdb
 		this->endScan();
 		this->bufMgr->flushFile(this->file);
 		// Delete blobfile used for the index
+		delete this->file;
 		File::remove(this->file->filename());
 	}
 
@@ -194,8 +230,8 @@ namespace badgerdb
 		}
 		if (foundKeyIndex)
 		{
-			int tempKeyArray[len + 1];
-			int tempRidArray[len + 1];
+			T tempKeyArray[len + 1];
+			RecordId tempRidArray[len + 1];
 			for (int i = 0; i < len; i++)
 			{
 				tempKeyArray[i] = keyArray[i];
@@ -219,7 +255,7 @@ namespace badgerdb
 	}
 
 	template <class T>
-	void insertKeyPageIdToKeyPageIdArray(T keyArray[], PageId pageNoArray[], int len, T key, PageId pageId)
+	void insertKeyPageIdToKeyPageIdArray(T keyArray[], PageId pageNoArray[], int len, T key, PageId pageNo)
 	{
 		bool foundKeyIndex = false;
 		int keyIndex = -1; // keyIndex is the index just before which to insert the given key
@@ -233,27 +269,27 @@ namespace badgerdb
 		}
 		if (foundKeyIndex)
 		{
-			int tempKeyArray[len + 1];
-			int tempRidArray[len + 1];
+			T tempKeyArray[len + 1];
+			PageId tempPageNoArray[len + 1];
 			for (int i = 0; i < len; i++)
 			{
 				tempKeyArray[i] = keyArray[i];
-				tempRidArray[i] = ridArray[i];
+				tempPageNoArray[i] = pageNoArray[i];
 			}
 			// Insert key before index keyIndex
-			keyArray[keyIndex] = key;
-			ridArray[keyIndex] = rid;
+			tempKeyArray[keyIndex] = key;
+			tempPageNoArray[keyIndex] = pageNo;
 			for (int i = keyIndex; i < len; i++)
 			{
 				keyArray[i + 1] = tempKeyArray[i];
-				ridArray[i + 1] = ridArray[i];
+				pageNoArray[i + 1] = tempPageNoArray[i];
 			}
 		}
 		else
 		{
 			// it means key needs to be inserted at the last
 			keyArray[len] = key;
-			ridArray[len] = rid;
+			pageNoArray[len] = pageNo;
 		}
 	}
 
@@ -267,7 +303,7 @@ namespace badgerdb
 		PageId rootPageId = this->rootPageNum;
 		Page *rootPage;
 		bufMgr->readPage(this->file, rootPageId, rootPage);
-		bufMgr->unPinPage(this->file, rootPageId, true);
+		bufMgr->unPinPage(this->file, rootPageId, false);
 		// First identify the leaf node
 		// Case 1: Root is leaf and ideal occupancy is not attained (Non-split)
 		if (this->isRootLeaf)
@@ -373,7 +409,7 @@ namespace badgerdb
 			// Read current page
 			Page *curPage;
 			bufMgr->readPage(this->file, nodePageNumber, curPage);
-			bufMgr->unPinPage(this->file, nodePageNumber, true);
+			bufMgr->unPinPage(this->file, nodePageNumber, false);
 			if (this->attributeType == Datatype::INTEGER)
 			{
 				// Cast it to non leaf
@@ -438,54 +474,94 @@ namespace badgerdb
 		// Read current page
 		Page *curPage;
 		this->bufMgr->readPage(this->file, pageNum, curPage);
-		this->bufMgr->unPinPage(this->file, pageNum, true);
+		this->bufMgr->unPinPage(this->file, pageNum, false);
 		// Cast to LeafNode
 		LeafNodeInt *curLeafNode = (LeafNodeInt *)curPage;
-		// Check the occupancy of the leaf node
-		if (hasSpaceInLeafNode(curLeafNode))
+		if (this->attributeType == Datatype::INTEGER)
 		{
-			// SubCase 1: Non-Split
-			// Insert the (key, record)
-			int keyCopy = *(int *)key;
-			RecordId ridCopy = rid;
-			insertKeyRidToKeyRidArray<int>(curLeafNode->keyArray, curLeafNode->ridArray, curLeafNode->len, keyCopy, ridCopy);
-			isSplit = false;
-		}
-		else
-		{
-			// SubCase 2: Split the leaf-node
-			// Create another page and move half the (key, recordID) to that node
-			Page *newPage;
-			PageId newPageNum;
-			bufMgr->allocPage(this->file, newPageNum, newPage);
-
-			int halfOffset = curLeafNode->len / 2;
-			// Cast the page to leaf node
-			LeafNodeInt *newPageLeafNode = (LeafNodeInt *)newPage;
-			for (int i = halfOffset; i < curLeafNode->len; i++)
+			// Check the occupancy of the leaf node
+			if (hasSpaceInLeafNode(curLeafNode))
 			{
-				int keyCopy = *(int *)curLeafNode->keyArray[i];
-				RecordId ridCopy = curLeafNode->ridArray[i];
+				// SubCase 1: Non-Split
+				// Insert the (key, record)
+				int keyCopy = *(int *)key;
+				RecordId ridCopy = rid;
+				insertKeyRidToKeyRidArray<int>(curLeafNode->keyArray, curLeafNode->ridArray, curLeafNode->len, keyCopy, ridCopy);
+				isSplit = false;
+			}
+			else
+			{
+				// SubCase 2: Split the leaf-node
+				// Create another page and move half the (key, recordID) to that node
+				Page *newPage;
+				PageId newPageNum;
+				bufMgr->allocPage(this->file, newPageNum, newPage);
+
+				// TODO: free these arrays
+				int *tempKeyArray = new int[this->leafOccupancy + 1];
+				int *tempRidArray = new int[this->leafOccupancy + 1];
+				int keyCopy = *(int *)key;
+				// Copy all the keys
+				for (int i = 0; i < curLeafNode->len; i++)
+				{
+					tempKeyArray[i] = curLeafNode->keyArray[i];
+				}
+				tempKeyArray[curLeafNode->len] = keyCopy;
+				// Sort the keys
+				std::sort(tempKeyArray, tempKeyArray + curLeafNode->len + 1);
+
+				// Find the middle key
+				int middleIndex = (curLeafNode->len + 1) / 2; // 0-based
+				int middleKey = tempKeyArray[middleIndex];
+				int leafNodeIdx = 0;
+				// 0...middleIndex-1 in the left node
+				for (int i = 0; i < middleIndex; i++)
+				{
+					curLeafNode->keyArray[leafNodeIdx++] = tempKeyArray[i];
+					if (tempKeyArray[i] != keyCopy)
+					{
+						curLeafNode->ridArray[i] =
+					}
+					else
+					{
+					}
+				}
+				// middleIndex...end in the right node
+
+				int halfOffset = curLeafNode->len / 2;
+				// Cast the page to leaf node
+				LeafNodeInt *newPageLeafNode = (LeafNodeInt *)newPage;
+				for (int i = halfOffset; i < curLeafNode->len; i++)
+				{
+					int keyCopy = *(int *)curLeafNode->keyArray[i];
+					RecordId ridCopy = curLeafNode->ridArray[i];
+					insertKeyRidToKeyRidArray<int>(newPageLeafNode->keyArray, newPageLeafNode->ridArray, newPageLeafNode->len, keyCopy, ridCopy);
+					newPageLeafNode->len += 1;
+				}
+
+				// Insert current key
+				int keyCopy = *(int *)key;
+				RecordId ridCopy = rid;
 				insertKeyRidToKeyRidArray<int>(newPageLeafNode->keyArray, newPageLeafNode->ridArray, newPageLeafNode->len, keyCopy, ridCopy);
 				newPageLeafNode->len += 1;
+
+				curLeafNode->len = halfOffset;
+
+				// Set next page id of left leaf node
+				curLeafNode->rightSibPageNo = newPageNum;
+
+				int middleKey = newPageLeafNode->keyArray[0];
+
+				splitKey = (void *)middleKey;
+				isSplit = true;
+				splitRightNodePageId = newPageNum;
 			}
-
-			// Insert current key
-			int keyCopy = *(int *)key;
-			RecordId ridCopy = rid;
-			insertKeyRidToKeyRidArray<int>(newPageLeafNode->keyArray, newPageLeafNode->ridArray, newPageLeafNode->len, keyCopy, ridCopy);
-			newPageLeafNode->len += 1;
-
-			curLeafNode->len = halfOffset;
-
-			// Set next page id of left leaf node
-			curLeafNode->rightSibPageNo = newPageNum;
-
-			int middleKey = newPageLeafNode->keyArray[0];
-
-			splitKey = (void *)middleKey;
-			isSplit = true;
-			splitRightNodePageId = newPageNum;
+		}
+		else if (this->attributeType == Datatype::DOUBLE)
+		{
+		}
+		else if (this->attributeType == Datatype::STRING)
+		{
 		}
 	}
 
@@ -494,7 +570,7 @@ namespace badgerdb
 		// Read current page
 		Page *curPage;
 		this->bufMgr->readPage(this->file, nodePageNumber, curPage);
-		this->bufMgr->unPinPage(this->file, nodePageNumber, true);
+		this->bufMgr->unPinPage(this->file, nodePageNumber, false);
 		// Cast to NonleafNode
 		if (this->attributeType == Datatype::INTEGER)
 		{
@@ -503,11 +579,40 @@ namespace badgerdb
 			if (hasSpaceInNonLeafNode(curNonLeafNode))
 			{
 				// Insert the key and rightPageId
-				insertKeyPageIdToKeyPageIdArray<int>(curNonLeafNode->keyArray, curNonLeafNode->pageNoArray, middleKey, splitRightNodePageId);
+				int keyCopy = *(int *)middleKey;
+				insertKeyPageIdToKeyPageIdArray<int>(curNonLeafNode->keyArray, curNonLeafNode->pageNoArray, curNonLeafNode->len, keyCopy, splitRightNodePageId);
 			}
 			else
 			{
-				// Split
+				// Split and move up the middleKey
+				Page *newPage;
+				PageId newPageNum;
+				bufMgr->allocPage(this->file, newPageNum, newPage);
+
+				int halfOffset = curNonLeafNode->len / 2;
+				// Cast the page to leaf node
+				NonLeafNodeInt *newPageNonLeafNode = (NonLeafNodeInt *)newPage;
+				for (int i = halfOffset; i < curNonLeafNode->len; i++)
+				{
+					int keyCopy = *(int *)curNonLeafNode->keyArray[i];
+					PageId pageIdCopy = curNonLeafNode->pageNoArray[i];
+					insertKeyPageIdToKeyPageIdArray<int>(newPageNonLeafNode->keyArray, newPageNonLeafNode->pageNoArray, newPageNonLeafNode->len, keyCopy, pageIdCopy);
+					newPageNonLeafNode->len += 1;
+				}
+
+				// Insert current key
+				int keyCopy = *(int *)splitKey;
+				PageId pageIdCopy = splitRightNodePageId;
+				insertKeyPageIdToKeyPageIdArray<int>(newPageNonLeafNode->keyArray, newPageNonLeafNode->pageNoArray, newPageNonLeafNode->len, keyCopy, pageIdCopy);
+				newPageNonLeafNode->len += 1;
+
+				curNonLeafNode->len = halfOffset;
+
+				int middleKey = newPageNonLeafNode->keyArray[0];
+
+				splitKey = (void *)middleKey;
+				isSplit = true;
+				splitRightNodePageId = newPageNum;
 			}
 		}
 	}
@@ -521,6 +626,12 @@ namespace badgerdb
 									 const void *highValParm,
 									 const Operator highOpParm)
 	{
+		// Check if another scan is executing
+		// If another scan is executing, end that scan
+		if (this->scanExecuting)
+		{
+			this->endScan();
+		}
 		this->scanExecuting = true;
 		if (this->attributeType == Datatype::INTEGER)
 		{
@@ -534,59 +645,40 @@ namespace badgerdb
 			PageId rootPageId = this->rootPageNum;
 			Page *rootPage;
 			bufMgr->readPage(this->file, rootPageId, rootPage);
-			bufMgr->unPinPage(this->file, rootPageId, true);
 			if (isRootLeaf)
 			{
-				if (this->attributeType == Datatype::INTEGER)
+				LeafNodeInt *rootLeafNode = (LeafNodeInt *)rootPage;
+				for (int i = 0; i < rootLeafNode->len; i++)
 				{
-					LeafNodeInt *rootLeafNode = (LeafNodeInt *)rootPage;
-					for (int i = 0; i < leafOccupancy; i++)
+					if (rootLeafNode->keyArray[i] >= lowIntValue)
 					{
-						if (rootLeafNode->keyArray[i] >= lowIntValue)
-						{
-							this->nextEntry = i;
-						}
+						this->nextEntry = i;
 					}
-				}
-				else if (this->attributeType == Datatype::DOUBLE)
-				{
-					// TODO
-				}
-				else if (this->attributeType == Datatype::STRING)
-				{
-					// TODO
 				}
 			}
 			else
 			{
 				int curPageNum = this->rootPageNum;
-				while (curLevel < this->treeLevel)
+				// Navigate till the leaf node
+				while (curLevel <= this->treeLevel)
 				{
 					Page *curPage;
 					bufMgr->readPage(this->file, curPageNum, curPage);
-					bufMgr->unPinPage(this->file, curPageNum, true);
-					// Navigate till the leaf node
+					// Unpin all the pages except the leaf page
 					if (curLevel != this->treeLevel)
 					{
-						if (this->attributeType == Datatype::INTEGER)
+						bufMgr->unPinPage(this->file, curPageNum, false);
+					}
+					if (curLevel != this->treeLevel)
+					{
+						NonLeafNodeInt *curNonLeafNode = (NonLeafNodeInt *)curPageNum;
+						for (int i = 0; i < curNonLeafNode->len; i++)
 						{
-							NonLeafNodeInt *curNonLeafNode = (NonLeafNodeInt *)curPageNum;
-							for (int i = 0; i < this->nodeOccupancy; i++)
+							if (curNonLeafNode->keyArray[i] >= lowIntValue)
 							{
-								if (curNonLeafNode->keyArray[i] >= lowIntValue)
-								{
-									curPageNum = curNonLeafNode->pageNoArray[i];
-									break;
-								}
+								curPageNum = curNonLeafNode->pageNoArray[i];
+								break;
 							}
-						}
-						else if (this->attributeType == Datatype::DOUBLE)
-						{
-							// TODO
-						}
-						else if (this->attributeType == Datatype::STRING)
-						{
-							// TODO
 						}
 					}
 					else
@@ -598,6 +690,7 @@ namespace badgerdb
 							if (curLeafNode->keyArray[i] >= lowIntValue)
 							{
 								this->nextEntry = i;
+								this->currentPageData = curPage;
 								break;
 							}
 						}
@@ -614,19 +707,34 @@ namespace badgerdb
 
 	const void BTreeIndex::scanNext(RecordId &outRid)
 	{
-		if (this->nextEntry < this->leafOccupancy)
+		// Cast the curPage to leaf page node
+		if (this->attributeType == Datatype::INTEGER)
 		{
-			// Fetch the record from this entry
-			// Cast currentPageData to appropriate leafNode struct
-			if (this->attributeType == Datatype::INTEGER)
+			LeafNodeInt *curLeafNode = (LeafNodeInt *)this->currentPageData;
+			if (this->nextEntry < curLeafNode->len)
 			{
-				LeafNodeInt leafNodeInt = *(LeafNodeInt *)(this->currentPageData);
+				// Fetch the record from this entry
+				outRid = curLeafNode->ridArray[nextEntry];
 			}
-		}
-		else
-		{
-			// Move to the next sibling
-			// Set the nextEntry to 1
+			else
+			{
+				if (curLeafNode->rightSibPageNo == -1)
+				{
+					// Reached the end
+					throw IndexScanCompletedException();
+				}
+				PageId siblingPageNo = curLeafNode->rightSibPageNo;
+				// Unpin the current page
+				this->bufMgr->unPinPage(this->file, this->currentPageNum, false);
+				this->currentPageNum = siblingPageNo;
+				// Read the sibling page and keep it pinned
+				this->bufMgr->readPage(this->file, this->currentPageNum, this->currentPageData);
+				// Cast the page to leaf node
+				curLeafNode = (LeafNodeInt *)this->currentPageData;
+				outRid = curLeafNode->ridArray[0];
+				// Move to the next sibling
+				this->nextEntry = 1;
+			}
 		}
 	}
 
@@ -642,5 +750,6 @@ namespace badgerdb
 		}
 		this->scanExecuting = false;
 		// Unpin all the pages that were pinned
+		this->bufMgr->unPinPage(this->file, this->currentPageNum, false);
 	}
 }
