@@ -247,7 +247,6 @@ struct NonLeafNodeString {
  * @brief Structure for all leaf nodes when the key is of INTEGER type.
  */
 struct LeafNodeInt {
-  int level;
   /**
    * Stores keys.
    */
@@ -272,7 +271,6 @@ struct LeafNodeInt {
  * @brief Structure for all leaf nodes when the key is of DOUBLE type.
  */
 struct LeafNodeDouble {
-  int level;
   /**
    * Stores keys.
    */
@@ -296,7 +294,6 @@ struct LeafNodeDouble {
  * @brief Structure for all leaf nodes when the key is of STRING type.
  */
 struct LeafNodeString {
-  int level;
   /**
    * Stores keys.
    */
@@ -425,7 +422,6 @@ class BTreeIndex {
   Operator highOp;
 
   bool isRootLeaf;
-  bool treeLevel;
 
   void setLeafOccupancy(const Datatype dataType);
 
@@ -479,7 +475,7 @@ class BTreeIndex {
    **/
   const void insertEntry(const void *key, const RecordId rid);
 
-  const void insertRecursive(int level, PageId nodePageNumber, const void *key,
+  const void insertRecursive(PageId nodePageNumber, const void *key,
                              const RecordId rid, bool &isSplit, void *splitKey,
                              PageId &splitRightNodePageId);
 
