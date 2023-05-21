@@ -9,6 +9,7 @@
 #include "btree.h"
 
 #include <algorithm>
+#include <deque>
 #include <vector>
 
 #include "exceptions/bad_index_info_exception.h"
@@ -164,6 +165,92 @@ BTreeIndex::BTreeIndex(const std::string &relationName,
       }
     } catch (EndOfFileException e) {
       std::cout << "Read all records" << std::endl;
+    }
+  }
+}
+
+void BTreeIndex::printBTree() {
+  PageId curPageNum = this->rootPageNum;
+  Page *curPage;
+  int level = 0;
+  if (this->attributeType == Datatype::INTEGER) {
+    while (true) {
+      // Check if the root is leaf node or not
+      if (isRootLeaf) {
+        // Read current page
+        this->bufMgr->readPage(this->file, curPageNum, curPage);
+        // Cast to leafNode
+        LeafNodeInt *rootLeafNode = (LeafNodeInt *)curPage;
+        std::cout << "Printing keys for root node" << std::endl;
+        for (int i = 0; i < rootLeafNode->len; i++) {
+          std::cout << rootLeafNode->keyArray[i] << " ";
+        }
+        std::cout << std::endl;
+        std::cout << "Printing rids (page_no, slot_no) for root node"
+                  << std::endl;
+        for (int i = 0; i < rootLeafNode->len; i++) {
+          std::cout << "( " << rootLeafNode->ridArray[i].page_number << ", "
+                    << rootLeafNode->ridArray[i].slot_number << " )";
+        }
+        std::cout << std::endl;
+      } else {
+        std::deque<PageId> pageNoQueue;
+        pageNoQueue.push_back(curPageNum);
+        bool secondLastLevel = false;
+        while (pageNoQueue.size() > 0) {
+          int sz = pageNoQueue.size();
+          for (int k = 0; k < sz; k++) {
+            curPageNum = *pageNoQueue.begin();
+            pageNoQueue.pop_front();
+            // Read current page
+            this->bufMgr->readPage(this->file, curPageNum, curPage);
+            // Cast to non-leaf node
+            NonLeafNodeInt *nonLeafNode = (NonLeafNodeInt *)curPage;
+            if (nonLeafNode->level == 1) {
+              secondLastLevel = true;
+            }
+            std::cout << "Printing keys for current node" << std::endl;
+            for (int i = 0; i < nonLeafNode->len; i++) {
+              std::cout << nonLeafNode->keyArray[i] << " ";
+            }
+            std::cout << std::endl;
+            std::cout << "Printing page_no for current node" << std::endl;
+            for (int i = 0; i < nonLeafNode->len + 1; i++) {
+              std::cout << nonLeafNode->pageNoArray[i] << " ";
+              pageNoQueue.push_back(nonLeafNode->pageNoArray[i]);
+            }
+            this->bufMgr->unPinPage(this->file, curPageNum, false);
+            std::cout << std::endl;
+          }
+          if (secondLastLevel) {
+            // Reached the last level of leaf nodes
+            int sz = pageNoQueue.size();
+            for (int k = 0; k < sz; k++) {
+              curPageNum = *pageNoQueue.begin();
+              pageNoQueue.pop_front();
+              // Read current page
+              this->bufMgr->readPage(this->file, curPageNum, curPage);
+              // Cast to leaf nodes
+              LeafNodeInt *curLeafNode = (LeafNodeInt *)curPage;
+              std::cout << "Printing keys for root node" << std::endl;
+              for (int i = 0; i < curLeafNode->len; i++) {
+                std::cout << curLeafNode->keyArray[i] << " ";
+              }
+              std::cout << std::endl;
+              std::cout << "Printing rids (page_no, slot_no) for root node"
+                        << std::endl;
+              for (int i = 0; i < curLeafNode->len; i++) {
+                std::cout << "( " << curLeafNode->ridArray[i].page_number
+                          << ", " << curLeafNode->ridArray[i].slot_number
+                          << " )";
+              }
+              std::cout << std::endl;
+              this->bufMgr->unPinPage(this->file, curPageNum, false);
+            }
+            return;
+          }
+        }
+      }
     }
   }
 }

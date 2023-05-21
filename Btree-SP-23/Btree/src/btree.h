@@ -509,6 +509,8 @@ class BTreeIndex {
   template <typename T>
   void insertKeyPageIdToKeyPageIdArray(T keyArray[], PageId pageNoArray[],
                                        int len, T key, PageId pageNo);
+  
+  void printBTree();
 
   /**
    * Begin a filtered scan of the index.  For instance, if the method is called
