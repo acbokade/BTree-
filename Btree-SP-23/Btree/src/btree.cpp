@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <deque>
 #include <vector>
+#include <limits.h>
 
 #include "exceptions/bad_index_info_exception.h"
 #include "exceptions/bad_opcodes_exception.h"
@@ -26,10 +27,10 @@
 
 namespace badgerdb {
 
-const int IDEAL_OCCUPANCY = 1;
-const int INVALID_KEY = INT_MIN;
-const int INVALID_PAGE = INT_MIN;
-const int INVALID_KEY_INDEX = INT_MIN;
+// const int IDEAL_OCCUPANCY = 1;
+// const int INVALID_KEY = INT_MIN;
+// const int INVALID_PAGE = INT_MIN;
+// const int INVALID_KEY_INDEX = INT_MIN;
 
 // -----------------------------------------------------------------------------
 // BTreeIndex::BTreeIndex -- Constructor
@@ -105,7 +106,7 @@ BTreeIndex::BTreeIndex(const std::string &relationName,
     }
   } else {
     // Create the blob file for the index
-    this->file = &BlobFile::create(indexName);
+    *this->file = BlobFile::create(indexName);
     // Create pages for metadata and root (page 1 and 2 repectively)
     PageId metaPageNo;
     Page *metaPage;
@@ -274,86 +275,86 @@ BTreeIndex::~BTreeIndex() {
   this->file = nullptr;
 }
 
-template <typename T>
-bool BTreeIndex::hasSpaceInLeafNode(T *leafNode) {
-  return leafNode->len != IDEAL_OCCUPANCY * this->leafOccupancy;
-}
+// template <typename T>
+// bool BTreeIndex::hasSpaceInLeafNode(T *leafNode) {
+//   return leafNode->len != IDEAL_OCCUPANCY * this->leafOccupancy;
+// }
 
-template <typename T>
-bool BTreeIndex::hasSpaceInNonLeafNode(T *nonLeafNode) {
-  return nonLeafNode->len != IDEAL_OCCUPANCY * this->nodeOccupancy;
-}
+// template <typename T>
+// bool BTreeIndex::hasSpaceInNonLeafNode(T *nonLeafNode) {
+//   return nonLeafNode->len != IDEAL_OCCUPANCY * this->nodeOccupancy;
+// }
 
-template <class T>
-void insertKeyRidToKeyRidArray(T keyArray[], RecordId ridArray[], int len,
-                               T key, const RecordId rid) {
-  if (len == 0) {
-    keyArray[0] = key;
-    ridArray[0] = rid;
-    return;
-  }
-  bool foundKeyIndex = false;
-  int keyIndex =
-      -1;  // keyIndex is the index just before which to insert the given key
-  for (int i = 0; i < len; i++) {
-    if (keyArray[i] >= key) {
-      keyIndex = i;
-      foundKeyIndex = true;
-    }
-  }
-  if (foundKeyIndex) {
-    T tempKeyArray[len + 1];
-    RecordId tempRidArray[len + 1];
-    for (int i = 0; i < len; i++) {
-      tempKeyArray[i] = keyArray[i];
-      tempRidArray[i] = ridArray[i];
-    }
-    // Insert key before index keyIndex
-    keyArray[keyIndex] = key;
-    ridArray[keyIndex] = rid;
-    for (int i = keyIndex; i < len; i++) {
-      keyArray[i + 1] = tempKeyArray[i];
-      ridArray[i + 1] = tempRidArray[i];
-    }
-  } else {
-    // it means key needs to be inserted at the last
-    keyArray[len] = key;
-    ridArray[len] = rid;
-  }
-}
+// template <class T>
+// void insertKeyRidToKeyRidArray(T keyArray[], RecordId ridArray[], int len,
+//                                T key, const RecordId rid) {
+//   if (len == 0) {
+//     keyArray[0] = key;
+//     ridArray[0] = rid;
+//     return;
+//   }
+//   bool foundKeyIndex = false;
+//   int keyIndex =
+//       -1;  // keyIndex is the index just before which to insert the given key
+//   for (int i = 0; i < len; i++) {
+//     if (keyArray[i] >= key) {
+//       keyIndex = i;
+//       foundKeyIndex = true;
+//     }
+//   }
+//   if (foundKeyIndex) {
+//     T tempKeyArray[len + 1];
+//     RecordId tempRidArray[len + 1];
+//     for (int i = 0; i < len; i++) {
+//       tempKeyArray[i] = keyArray[i];
+//       tempRidArray[i] = ridArray[i];
+//     }
+//     // Insert key before index keyIndex
+//     keyArray[keyIndex] = key;
+//     ridArray[keyIndex] = rid;
+//     for (int i = keyIndex; i < len; i++) {
+//       keyArray[i + 1] = tempKeyArray[i];
+//       ridArray[i + 1] = tempRidArray[i];
+//     }
+//   } else {
+//     // it means key needs to be inserted at the last
+//     keyArray[len] = key;
+//     ridArray[len] = rid;
+//   }
+// }
 
-template <class T>
-void insertKeyPageIdToKeyPageIdArray(T keyArray[], PageId pageNoArray[],
-                                     int len, T key, PageId pageNo) {
-  bool foundKeyIndex = false;
-  int keyIndex =
-      -1;  // keyIndex is the index just before which to insert the given key
-  for (int i = 0; i < len; i++) {
-    if (keyArray[i] >= key) {
-      keyIndex = i;
-      foundKeyIndex = true;
-    }
-  }
-  if (foundKeyIndex) {
-    T tempKeyArray[len + 1];
-    PageId tempPageNoArray[len + 1];
-    for (int i = 0; i < len; i++) {
-      tempKeyArray[i] = keyArray[i];
-      tempPageNoArray[i] = pageNoArray[i];
-    }
-    // Insert key before index keyIndex
-    tempKeyArray[keyIndex] = key;
-    tempPageNoArray[keyIndex] = pageNo;
-    for (int i = keyIndex; i < len; i++) {
-      keyArray[i + 1] = tempKeyArray[i];
-      pageNoArray[i + 1] = tempPageNoArray[i];
-    }
-  } else {
-    // it means key needs to be inserted at the last
-    keyArray[len] = key;
-    pageNoArray[len] = pageNo;
-  }
-}
+// template <class T>
+// void insertKeyPageIdToKeyPageIdArray(T keyArray[], PageId pageNoArray[],
+//                                      int len, T key, PageId pageNo) {
+//   bool foundKeyIndex = false;
+//   int keyIndex =
+//       -1;  // keyIndex is the index just before which to insert the given key
+//   for (int i = 0; i < len; i++) {
+//     if (keyArray[i] >= key) {
+//       keyIndex = i;
+//       foundKeyIndex = true;
+//     }
+//   }
+//   if (foundKeyIndex) {
+//     T tempKeyArray[len + 1];
+//     PageId tempPageNoArray[len + 1];
+//     for (int i = 0; i < len; i++) {
+//       tempKeyArray[i] = keyArray[i];
+//       tempPageNoArray[i] = pageNoArray[i];
+//     }
+//     // Insert key before index keyIndex
+//     tempKeyArray[keyIndex] = key;
+//     tempPageNoArray[keyIndex] = pageNo;
+//     for (int i = keyIndex; i < len; i++) {
+//       keyArray[i + 1] = tempKeyArray[i];
+//       pageNoArray[i + 1] = tempPageNoArray[i];
+//     }
+//   } else {
+//     // it means key needs to be inserted at the last
+//     keyArray[len] = key;
+//     pageNoArray[len] = pageNo;
+//   }
+// }
 
 // -----------------------------------------------------------------------------
 // BTreeIndex::insertEntry
@@ -857,4 +858,13 @@ const void BTreeIndex::endScan() {
   // Unpin all the pages that were pinned
   this->bufMgr->unPinPage(this->file, this->currentPageNum, true);
 }
+// template void BTreeIndex::insertKeyRidToKeyRidArray<int>(int keyArray[], RecordId ridArray[],
+//                                     int len, int key, const RecordId rid);
+
+// template bool BTreeIndex::hasSpaceInLeafNode<LeafNodeInt>(LeafNodeInt *leafNode);
+
+// template bool BTreeIndex::hasSpaceInNonLeafNode<NonLeafNodeInt>(NonLeafNodeInt *nonLeafNode);
+
+// template void BTreeIndex::insertKeyPageIdToKeyPageIdArray<int>(int keyArray[], PageId pageNoArray[],
+//                                           int len, int key, PageId pageNo);
 }  // namespace badgerdb

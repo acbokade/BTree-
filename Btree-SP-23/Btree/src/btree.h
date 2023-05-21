@@ -16,9 +16,15 @@
 #include "file.h"
 #include "page.h"
 #include "string.h"
+#include <limits.h>
 #include "types.h"
 
 namespace badgerdb {
+
+const int IDEAL_OCCUPANCY = 1;
+const int INVALID_KEY = INT_MIN;
+const int INVALID_PAGE = INT_MIN;
+const int INVALID_KEY_INDEX = INT_MIN;
 
 /**
  * @brief Datatype enumeration type.
@@ -447,10 +453,10 @@ class BTreeIndex {
    * @param outIndexName        Return the name of index file.
    * @param bufMgrIn						Buffer Manager
    * Instance
-   * @param attrByteOffset			Offset of attribute, over which index is
-   * to be built, in the record
-   * @param attrType						Datatype of attribute over which index
-   * is built
+   * @param attrByteOffset			Offset of attribute, over which
+   * index is to be built, in the record
+   * @param attrType						Datatype of
+   * attribute over which index is built
    * @throws  BadIndexInfoException     If the index file already exists for the
    * corresponding attribute, but values in metapage(relationName, attribute
    * byte offset, attribute type etc.) do not match with values received through
@@ -496,20 +502,87 @@ class BTreeIndex {
                            bool &isSplit, void *splitKey,
                            PageId &splitRightNodePageId);
 
-  template <typename T>
+  template <class T>
   void insertKeyRidToKeyRidArray(T keyArray[], RecordId ridArray[], int len,
-                                 T key, const RecordId rid);
+                                 T key, const RecordId rid) {
+    if (len == 0) {
+      keyArray[0] = key;
+      ridArray[0] = rid;
+      return;
+    }
+    bool foundKeyIndex = false;
+    int keyIndex =
+        -1;  // keyIndex is the index just before which to insert the given key
+    for (int i = 0; i < len; i++) {
+      if (keyArray[i] >= key) {
+        keyIndex = i;
+        foundKeyIndex = true;
+      }
+    }
+    if (foundKeyIndex) {
+      T tempKeyArray[len + 1];
+      RecordId tempRidArray[len + 1];
+      for (int i = 0; i < len; i++) {
+        tempKeyArray[i] = keyArray[i];
+        tempRidArray[i] = ridArray[i];
+      }
+      // Insert key before index keyIndex
+      keyArray[keyIndex] = key;
+      ridArray[keyIndex] = rid;
+      for (int i = keyIndex; i < len; i++) {
+        keyArray[i + 1] = tempKeyArray[i];
+        ridArray[i + 1] = tempRidArray[i];
+      }
+    } else {
+      // it means key needs to be inserted at the last
+      keyArray[len] = key;
+      ridArray[len] = rid;
+    }
+  }
 
   template <typename T>
-  bool hasSpaceInLeafNode(T *leafNode);
+  bool hasSpaceInLeafNode(T *leafNode) {
+    return leafNode->len != IDEAL_OCCUPANCY * this->leafOccupancy;
+  }
 
   template <typename T>
-  bool hasSpaceInNonLeafNode(T *nonLeafNode);
+  bool hasSpaceInNonLeafNode(T *nonLeafNode) {
+    return nonLeafNode->len != IDEAL_OCCUPANCY * this->nodeOccupancy;
+  }
 
-  template <typename T>
+  template <class T>
   void insertKeyPageIdToKeyPageIdArray(T keyArray[], PageId pageNoArray[],
-                                       int len, T key, PageId pageNo);
-  
+                                       int len, T key, PageId pageNo) {
+    bool foundKeyIndex = false;
+    int keyIndex =
+        -1;  // keyIndex is the index just before which to insert the given key
+    for (int i = 0; i < len; i++) {
+      if (keyArray[i] >= key) {
+        keyIndex = i;
+        foundKeyIndex = true;
+      }
+    }
+    if (foundKeyIndex) {
+      T tempKeyArray[len + 1];
+      PageId tempPageNoArray[len + 1];
+      for (int i = 0; i < len; i++) {
+        tempKeyArray[i] = keyArray[i];
+        tempPageNoArray[i] = pageNoArray[i];
+      }
+      // Insert key before index keyIndex
+      tempKeyArray[keyIndex] = key;
+      tempPageNoArray[keyIndex] = pageNo;
+      for (int i = keyIndex; i < len; i++) {
+        keyArray[i + 1] = tempKeyArray[i];
+        pageNoArray[i + 1] = tempPageNoArray[i];
+      }
+    } else {
+      // it means key needs to be inserted at the last
+      keyArray[len] = key;
+      pageNoArray[len] = pageNo;
+    }
+  }
+
   void printBTree();
 
   /**
@@ -556,5 +629,33 @@ class BTreeIndex {
    **/
   const void endScan();
 };
+// template <>
+// void insertKeyRidToKeyRidArray<int>(int keyArray[], RecordId ridArray[],
+//                                     int len, int key, const RecordId rid);
 
+// template <>
+// bool hasSpaceInLeafNode<LeafNodeInt *>(LeafNodeInt *leafNode);
+
+// template <>
+// bool hasSpaceInNonLeafNode<NonLeafNodeInt *>(NonLeafNodeInt *nonLeafNode);
+
+// template <>
+// void insertKeyPageIdToKeyPageIdArray<int>(int keyArray[], PageId
+// pageNoArray[],
+//                                           int len, int key, PageId pageNo)
+template void BTreeIndex::insertKeyRidToKeyRidArray<int>(int keyArray[],
+                                                         RecordId ridArray[],
+                                                         int len, int key,
+                                                         const RecordId rid);
+
+template bool BTreeIndex::hasSpaceInLeafNode<LeafNodeInt>(
+    LeafNodeInt *leafNode);
+
+template bool BTreeIndex::hasSpaceInNonLeafNode<NonLeafNodeInt>(
+    NonLeafNodeInt *nonLeafNode);
+
+template void BTreeIndex::insertKeyPageIdToKeyPageIdArray<int>(
+    int keyArray[], PageId pageNoArray[], int len, int key, PageId pageNo);
 }  // namespace badgerdb
+
+// #include "btree.cpp"
