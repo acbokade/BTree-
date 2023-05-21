@@ -86,7 +86,7 @@ BTreeIndex::BTreeIndex(const std::string &relationName,
     Page *metaPage;
     this->bufMgr->readPage(this->file, metaPageId, metaPage);
     // Unpin the page since the page won't be used for writing here after
-    this->bufMgr->unPinPage(this->file, metaPageId, metaPage);
+    this->bufMgr->unPinPage(this->file, metaPageId, false);
     // Cast meta page to IndexMetaInfo
     IndexMetaInfo *indexMetaInfo = (IndexMetaInfo *)(metaPage);
     // Set the root page id
@@ -184,6 +184,7 @@ BTreeIndex::~BTreeIndex() {
   // Delete blobfile used for the index
   delete this->file;
   File::remove(this->file->filename());
+  this->file = nullptr;
 }
 
 template <typename T>
@@ -607,67 +608,67 @@ const void BTreeIndex::startScan(const void *lowValParm,
       }
     } else {
       int curPageNum = this->rootPageNum;
-      // Navigate till the leaf node
-      while (curLevel <= this->treeLevel) {
-        Page *curPage;
+      Page *curPage;
+      bufMgr->readPage(this->file, curPageNum, curPage);
+      // Cast to non leaf node
+      NonLeafNodeInt *curNonLeafNode = (NonLeafNodeInt *)curPageNum;
+      // Navigate till the node which is just above the leaf node
+      while (true) {
         bufMgr->readPage(this->file, curPageNum, curPage);
         // Unpin each page except the leaf page
-        if (curLevel != this->treeLevel) {
+        bufMgr->unPinPage(this->file, curPageNum, false);
+        // Cast to non leaf node
+        NonLeafNodeInt *curNonLeafNode = (NonLeafNodeInt *)curPageNum;
+        bool nextKeyFound = false;
+        for (int i = 0; i < curNonLeafNode->len; i++) {
+          // For both GT and GTE operator, need to find first key index
+          // which is greater than lowIntValue (convention: left child node
+          // contains keys strictly less than key of parent node and right
+          // child node contains keys greater than or equal to parent node
+          // key)
+          if (curNonLeafNode->keyArray[i] > lowIntValue) {
+            curPageNum = curNonLeafNode->pageNoArray[i];
+            nextKeyFound = true;
+            break;
+          }
+        }
+        if (!nextKeyFound) {
+          // It means the next page should be the last index of pageNoArray
+          curPageNum = curNonLeafNode->pageNoArray[curNonLeafNode->len];
+        }
+        if (curNonLeafNode->level == 0) {
+          break;
+        }
+      }
+      // Reached the leaf node
+      LeafNodeInt *curLeafNode = (LeafNodeInt *)curPageNum;
+      // Iterate over the leaf nodes and its siblings until a key is found
+      // satisfying the criteria or the end of index is reached
+      while (true) {
+        // Scan current page
+        // Its possible that current page doesn't contain any satisfying
+        // key, in which case move to next sibling (eg 10, 11, 12 are the
+        // keys in current page and lowIntValue - 14)
+        bool satisfyingKeyFound = false;
+        for (int i = 0; i < curLeafNode->len; i++) {
+          if (curLeafNode->keyArray[i] >= lowIntValue) {
+            this->nextEntry = i;
+            this->currentPageData = curPage;
+            satisfyingKeyFound = true;
+            break;
+          }
+        }
+        if (!satisfyingKeyFound) {
+          // Unpin current page
+          PageId nextPageNo = curLeafNode->rightSibPageNo;
           bufMgr->unPinPage(this->file, curPageNum, false);
+          curPageNum = nextPageNo;
+          if (nextPageNo == INVALID_PAGE) {
+            throw NoSuchKeyFoundException();
+          }
+          bufMgr->readPage(this->file, curPageNum, curPage);
+          curLeafNode = (LeafNodeInt *)curPage;
         }
-        if (curLevel != this->treeLevel) {
-          // Cast to non leaf node
-          NonLeafNodeInt *curNonLeafNode = (NonLeafNodeInt *)curPageNum;
-          bool nextKeyFound = false;
-          for (int i = 0; i < curNonLeafNode->len; i++) {
-            // For both GT and GTE operator, need to find first key index
-            // which is greater than lowIntValue (convention: left child node
-            // contains keys strictly less than key of parent node and right
-            // child node contains keys greater than or equal to parent node
-            // key)
-            if (curNonLeafNode->keyArray[i] > lowIntValue) {
-              curPageNum = curNonLeafNode->pageNoArray[i];
-              nextKeyFound = true;
-              break;
-            }
-          }
-          if (!nextKeyFound) {
-            // It means the next page should be the last index of pageNoArray
-            curPageNum = curNonLeafNode->pageNoArray[curNonLeafNode->len];
-          }
-        } else {
-          // Reached the leaf node
-          LeafNodeInt *curLeafNode = (LeafNodeInt *)curPageNum;
-          // Iterate over the leaf nodes and its siblings until a key is found
-          // satisfying the criteria or the end of index is reached
-          while (true) {
-            // Scan current page
-            // Its possible that current page doesn't contain any satisfying
-            // key, in which case move to next sibling (eg 10, 11, 12 are the
-            // keys in current page and lowIntValue - 14)
-            bool satisfyingKeyFound = false;
-            for (int i = 0; i < curLeafNode->len; i++) {
-              if (curLeafNode->keyArray[i] >= lowIntValue) {
-                this->nextEntry = i;
-                this->currentPageData = curPage;
-                satisfyingKeyFound = true;
-                break;
-              }
-            }
-            if (!satisfyingKeyFound) {
-              // Unpin current page
-              PageId nextPageNo = curLeafNode->rightSibPageNo;
-              bufMgr->unPinPage(this->file, curPageNum, false);
-              curPageNum = nextPageNo;
-              if (nextPageNo == INVALID_PAGE) {
-                throw NoSuchKeyFoundException();
-              }
-              bufMgr->readPage(this->file, curPageNum, curPage);
-              curLeafNode = (LeafNodeInt *)curPage;
-            }
-          }
-        }
-        curLevel += 1;
       }
     }
   } else if (this->attributeType == Datatype::DOUBLE) {

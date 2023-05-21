@@ -137,6 +137,15 @@ bool operator<(const RIDKeyPair<T> &r1, const RIDKeyPair<T> &r2) {
     return r1.rid.page_number < r2.rid.page_number;
 }
 
+template <class T>
+bool operator<(const PageKeyPair<T> &r1, const PageKeyPair<T> &r2) {
+  if (r1.key != r2.key) {
+    return r1.key < r2.key;
+  } else {
+    return r1.pageNo < r2.pageNo;
+  }
+}
+
 /**
  * @brief The meta page, which holds metadata for Index file, is always first
  * page of the btree index file and is cast to the following structure to store
@@ -438,10 +447,10 @@ class BTreeIndex {
    * @param outIndexName        Return the name of index file.
    * @param bufMgrIn						Buffer Manager
    * Instance
-   * @param attrByteOffset			Offset of attribute, over which index is to
-   * be built, in the record
-   * @param attrType						Datatype of attribute over which index is
-   * built
+   * @param attrByteOffset			Offset of attribute, over which index is
+   * to be built, in the record
+   * @param attrType						Datatype of attribute over which index
+   * is built
    * @throws  BadIndexInfoException     If the index file already exists for the
    * corresponding attribute, but values in metapage(relationName, attribute
    * byte offset, attribute type etc.) do not match with values received through
@@ -470,8 +479,8 @@ class BTreeIndex {
    *accordingly. Make sure to unpin pages as soon as you can.
    * @param key			Key to insert, pointer to integer/double/char
    *string
-   * @param rid			Record ID of a record whose entry is getting inserted
-   *into the index.
+   * @param rid			Record ID of a record whose entry is getting
+   *inserted into the index.
    **/
   const void insertEntry(const void *key, const RecordId rid);
 
