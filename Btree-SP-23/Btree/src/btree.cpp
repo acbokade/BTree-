@@ -8,10 +8,11 @@
 
 #include "btree.h"
 
+#include <limits.h>
+
 #include <algorithm>
 #include <deque>
 #include <vector>
-#include <limits.h>
 
 #include "exceptions/bad_index_info_exception.h"
 #include "exceptions/bad_opcodes_exception.h"
@@ -64,8 +65,8 @@ BTreeIndex::BTreeIndex(const std::string &relationName,
   // Create index file name
   std::ostringstream idxStr;
   idxStr << relationName << "." << attrByteOffset;
-  std::string indexName = idxStr.str();
-  bool indexFileExists = fileExists(indexName);
+  outIndexName = idxStr.str();
+  // bool indexFileExists = fileExists(outIndexName);
 
   // Initialize member variables
   this->attributeType = attrType;
@@ -78,12 +79,11 @@ BTreeIndex::BTreeIndex(const std::string &relationName,
   this->scanExecuting = false;
   this->nextEntry = INVALID_KEY_INDEX;
 
-  if (indexFileExists) {
+  try {
+    this->file = new BlobFile(outIndexName, false);
     // Validate the parameters of the method with the index file
     // Find out the meta page of the index file
     // Meta page is always the first page of the index file
-    BlobFile indexFile = BlobFile::open(indexName);
-    this->file = (File *)&indexFile;
     PageId metaPageId = this->headerPageNum;
     Page *metaPage;
     this->bufMgr->readPage(this->file, metaPageId, metaPage);
@@ -95,8 +95,8 @@ BTreeIndex::BTreeIndex(const std::string &relationName,
     this->rootPageNum = indexMetaInfo->rootPageNo;
     // Values in metapage (relationName, attribute byte offset, attribute type
     // etc.) must match
-    bool relationNameMatch =
-        std::string(indexMetaInfo->relationName) == relationName;
+    bool relationNameMatch = (strlen(indexMetaInfo->relationName) == relationName.size()) 
+    && !strcmp(indexMetaInfo->relationName, relationName.c_str());
     bool attributeByteOffsetMatch =
         indexMetaInfo->attrByteOffset == attrByteOffset;
     bool attrTypeMatch = indexMetaInfo->attrType == attrType;
@@ -104,9 +104,9 @@ BTreeIndex::BTreeIndex(const std::string &relationName,
       throw BadIndexInfoException(
           "Parameters passed while creating the index don't match");
     }
-  } else {
+  } catch (FileNotFoundException e) {
     // Create the blob file for the index
-    *this->file = BlobFile::create(indexName);
+    this->file = new BlobFile(outIndexName, true);
     // Create pages for metadata and root (page 1 and 2 repectively)
     PageId metaPageNo;
     Page *metaPage;
@@ -117,10 +117,12 @@ BTreeIndex::BTreeIndex(const std::string &relationName,
     // Cast the metaPage into the IndexMetaInfo
     IndexMetaInfo *indexMetaInfo = (IndexMetaInfo *)metaPage;
     this->bufMgr->allocPage(this->file, rootPageNo, rootPage);
+    this->rootPageNum = rootPageNo;
     // Write meta data to the meta page
     indexMetaInfo->attrType = attributeType;
     indexMetaInfo->attrByteOffset = attrByteOffset;
-    strcpy(indexMetaInfo->relationName, relationName.c_str());
+    strcpy((char*)(&indexMetaInfo->relationName), relationName.c_str());
+    indexMetaInfo->relationName[relationName.size()] = '\0';
     indexMetaInfo->rootPageNo = rootPageNo;
     // Meta page is modified now, we can unpin this page which will result in
     // disk flushing
@@ -368,6 +370,7 @@ const void BTreeIndex::insertEntry(const void *key, const RecordId rid) {
   // First identify the leaf node
   // Case 1: Root is leaf and ideal occupancy is not attained (Non-split)
   if (this->isRootLeaf) {
+    std::cout<<"Inserting when root is leaf"<<std::endl;
     if (this->attributeType == Datatype::INTEGER) {
       // Cast the rootPage to the leaf node
       LeafNodeInt *rootLeafNode = (LeafNodeInt *)rootPage;
@@ -443,6 +446,7 @@ const void BTreeIndex::insertEntry(const void *key, const RecordId rid) {
       // TODO
     }
   } else {
+    std::cout<<"Inserting when root is non-leaf"<<std::endl;
     // Case 2: Root is non-leaf
     bool isSplit = false;
     void *splitKey = nullptr;
@@ -517,6 +521,7 @@ const void BTreeIndex::insertLeaf(PageId pageNum, const void *key,
                                   const RecordId rid, bool &isSplit,
                                   void *splitKey,
                                   PageId &splitRightNodePageId) {
+                          std::cout<<"Inserting leaf case"<<std::endl;
   // Read current page
   Page *curPage;
   this->bufMgr->readPage(this->file, pageNum, curPage);
@@ -535,6 +540,7 @@ const void BTreeIndex::insertLeaf(PageId pageNum, const void *key,
                                      keyCopy, ridCopy);
       isSplit = false;
     } else {
+      std::cout<<"Leaf split case"<<std::endl;
       // SubCase 2: Split the leaf-node
       std::vector<RIDKeyPair<int>> ridKeyPairVec;
       // Insert all the key, rid pairs including current key, rid to be
@@ -593,6 +599,7 @@ const void BTreeIndex::insertNonLeaf(PageId nodePageNumber,
                                      const void *middleKey, bool &isSplit,
                                      void *splitKey,
                                      PageId &splitRightNodePageId) {
+                                      std::cout<<"Non leaf insert case"<<std::endl;
   // Read current page
   Page *curPage;
   this->bufMgr->readPage(this->file, nodePageNumber, curPage);
@@ -664,19 +671,33 @@ const void BTreeIndex::startScan(const void *lowValParm,
   if (highOpParm == Operator::GT || highOpParm == Operator::GTE) {
     throw BadOpcodesException();
   }
+  // Set up scan variables
   this->scanExecuting = true;
+  this->lowOp = lowOpParm;
+  this->highOp = highOpParm;
+  if (this->attributeType == Datatype::INTEGER) {
+    this->lowValInt = *(int*)lowValParm;
+    this->highValInt = *(int*)highValParm;
+  } else if (this->attributeType == Datatype::DOUBLE) {
+    this->lowValDouble = *(double*)lowValParm;
+    this->highValDouble = *(double*)highValParm;
+  } else if (this->attributeType == Datatype::STRING) {
+    this->lowValString = *(std::string*)lowValParm;
+    this->highValString = *(std::string*)highValParm;
+  }
+
   if (this->attributeType == Datatype::INTEGER) {
     int lowIntValue = *(int *)lowValParm;
     int highIntValue = *(int *)highValParm;
     if (lowIntValue > highIntValue) {
       throw BadScanrangeException();
     }
-    int curLevel = 0;
     PageId rootPageId = this->rootPageNum;
     Page *rootPage;
     bufMgr->readPage(this->file, rootPageId, rootPage);
     if (isRootLeaf) {
       LeafNodeInt *rootLeafNode = (LeafNodeInt *)rootPage;
+      this->currentPageData = rootPage;
       for (int i = 0; i < rootLeafNode->len; i++) {
         if (lowOpParm == Operator::GT &&
             rootLeafNode->keyArray[i] > lowIntValue) {
@@ -698,6 +719,7 @@ const void BTreeIndex::startScan(const void *lowValParm,
       int curPageNum = this->rootPageNum;
       Page *curPage;
       bufMgr->readPage(this->file, curPageNum, curPage);
+      this->currentPageData = curPage;
       // Cast to non leaf node
       NonLeafNodeInt *curNonLeafNode = (NonLeafNodeInt *)curPageNum;
       // Navigate till the node which is just above the leaf node
@@ -784,25 +806,24 @@ const void BTreeIndex::scanNext(RecordId &outRid) {
     LeafNodeInt *curLeafNode = (LeafNodeInt *)this->currentPageData;
     // Read the nextEntry, its valid now since we are validating it in the
     // function start
-    const RecordId entryRid = curLeafNode->ridArray[nextEntry];
+    RecordId entryRid = curLeafNode->ridArray[this->nextEntry];
     outRid = entryRid;
     // Update the nextEntry member
+        std::cout<<curLeafNode->keyArray[this->nextEntry]<<" "<<this->highValInt<<std::endl;
+
+    this->nextEntry += 1;
     if (this->nextEntry < curLeafNode->len) {
       // Fetch the record from this page
       // Check if the nextEntry matches the scan criteria
       if (this->highOp == LT) {
-        if (curLeafNode->keyArray[nextEntry] >= this->highValInt) {
+        if (curLeafNode->keyArray[this->nextEntry] >= this->highValInt) {
           // Reached the end of the scan
-          nextEntry = INT_MIN;
-        } else {
-          nextEntry += 1;
+          this->nextEntry = INT_MIN;
         }
       } else if (this->highOp == LTE) {
-        if (curLeafNode->keyArray[nextEntry] > this->highValInt) {
+        if (curLeafNode->keyArray[this->nextEntry] > this->highValInt) {
           // Reached the end of the scan
-          nextEntry = INT_MIN;
-        } else {
-          nextEntry += 1;
+          this->nextEntry = INT_MIN;
         }
       }
     } else {
@@ -825,21 +846,18 @@ const void BTreeIndex::scanNext(RecordId &outRid) {
       if (this->highOp == LT) {
         if (curLeafNode->keyArray[0] >= this->highValInt) {
           // Reached the end of the scan
-          nextEntry = INT_MIN;
+          this->nextEntry = INT_MIN;
         } else {
-          nextEntry = 0;
+          this->nextEntry = 0;
         }
       } else if (this->highOp == LTE) {
         if (curLeafNode->keyArray[0] > this->highValInt) {
           // Reached the end of the scan
-          nextEntry = INT_MIN;
+          this->nextEntry = INT_MIN;
         } else {
-          nextEntry = 0;
+          this->nextEntry = 0;
         }
       }
-      outRid = curLeafNode->ridArray[0];
-      // Move to the next sibling
-      this->nextEntry = 1;
     }
   } else if (this->attributeType == Datatype::DOUBLE) {
   } else if (this->attributeType == Datatype::STRING) {
@@ -855,16 +873,25 @@ const void BTreeIndex::endScan() {
     throw ScanNotInitializedException();
   }
   this->scanExecuting = false;
+  try {
   // Unpin all the pages that were pinned
   this->bufMgr->unPinPage(this->file, this->currentPageNum, true);
+  } catch(...) {
+
+  }
 }
-// template void BTreeIndex::insertKeyRidToKeyRidArray<int>(int keyArray[], RecordId ridArray[],
+// template void BTreeIndex::insertKeyRidToKeyRidArray<int>(int keyArray[],
+// RecordId ridArray[],
 //                                     int len, int key, const RecordId rid);
 
-// template bool BTreeIndex::hasSpaceInLeafNode<LeafNodeInt>(LeafNodeInt *leafNode);
+// template bool BTreeIndex::hasSpaceInLeafNode<LeafNodeInt>(LeafNodeInt
+// *leafNode);
 
-// template bool BTreeIndex::hasSpaceInNonLeafNode<NonLeafNodeInt>(NonLeafNodeInt *nonLeafNode);
+// template bool
+// BTreeIndex::hasSpaceInNonLeafNode<NonLeafNodeInt>(NonLeafNodeInt
+// *nonLeafNode);
 
-// template void BTreeIndex::insertKeyPageIdToKeyPageIdArray<int>(int keyArray[], PageId pageNoArray[],
+// template void BTreeIndex::insertKeyPageIdToKeyPageIdArray<int>(int
+// keyArray[], PageId pageNoArray[],
 //                                           int len, int key, PageId pageNo);
 }  // namespace badgerdb
