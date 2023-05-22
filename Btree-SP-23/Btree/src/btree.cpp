@@ -326,6 +326,7 @@ const void BTreeIndex::insertEntry(const void *key, const RecordId rid) {
         // Cast the page to leaf node
         LeafNodeInt *newPageLeafNode = (LeafNodeInt *)newPage;
         newPageLeafNode->rightSibPageNo = -1;
+        newPageLeafNode->len = 0;
         for (int i = middleKeyIndex; i < ridKeyPairVec.size(); i++) {
           int key_ = ridKeyPairVec[i].key;
           RecordId rid_ = ridKeyPairVec[i].rid;

@@ -543,7 +543,7 @@ class BTreeIndex {
         // Cast new page to non leaf node int
         NonLeafNodeInt* newNonLeafNodeInt = (NonLeafNodeInt*) newPage;
         newNonLeafNodeInt->len = 0;
-        // New key array length - curNonLeafNode-len + 1
+        // New key array length - curNonLeafNode->len + 1
         int splitKeyIndex = (curNonLeafNode->len) / 2;
         int newSplitKey = tempKeyArray[splitKeyIndex];
         // Ignore key at splitKeyIndex and move all the keys after that to new node
@@ -619,6 +619,7 @@ class BTreeIndex {
         // Move half the (key, recordID) to the new node
         // Cast the page to leaf node
         LeafNodeInt *newPageLeafNode = (LeafNodeInt *)newPage;
+        newPageLeafNode->len = 0;
         for (int i = middleKeyIndex; i < ridKeyPairVec.size(); i++) {
           int key_ = ridKeyPairVec[i].key;
           RecordId rid_ = ridKeyPairVec[i].rid;
