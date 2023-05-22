@@ -11,6 +11,7 @@
 #include <limits.h>
 
 #include <iostream>
+#include <algorithm>
 #include <sstream>
 #include <string>
 
@@ -517,7 +518,7 @@ class BTreeIndex {
             curNonLeafNode->len, keyCopy, splitRightNodePageId);
         // Set isSplit to false
         isSplit = false;
-        this->bufMgr->unPinPage(this->file, nodePageNumber, false);
+        this->bufMgr->unPinPage(this->file, nodePageNumber, true);
       } else {
         // Split and move up the middleKey
         // nextPageIndex is the index in the pageNoArray whose page was selected
@@ -562,7 +563,7 @@ class BTreeIndex {
         *splitKey = newSplitKey;
         splitRightNodePageId = newPageNum;
 
-        this->bufMgr->unPinPage(this->file, nodePageNumber, false);
+        this->bufMgr->unPinPage(this->file, nodePageNumber, true);
       }
     }
   }
@@ -574,19 +575,18 @@ class BTreeIndex {
     // Read current page
     Page *curPage;
     this->bufMgr->readPage(this->file, pageNum, curPage);
-    this->bufMgr->unPinPage(this->file, pageNum, false);
-    // Cast to LeafNode
-    LeafNodeInt *curLeafNode = (LeafNodeInt *)curPage;
     if (this->attributeType == Datatype::INTEGER) {
+      // Cast to LeafNode
+      LeafNodeInt* curLeafNode = (LeafNodeInt *)curPage;
       // Check the occupancy of the leaf node
       if (hasSpaceInLeafNode(curLeafNode)) {
         // SubCase 1: Non-Split
         // Insert the (key, record)
-        int keyCopy = *(int *)key;
-        RecordId ridCopy = rid;
         insertKeyRidToKeyRidArray<int>(curLeafNode->keyArray,
-                                       curLeafNode->ridArray, curLeafNode->len,
-                                       keyCopy, ridCopy);
+                                       curLeafNode->ridArray, 
+                                       curLeafNode->len,
+                                       key, rid);
+        this->bufMgr->unPinPage(this->file, pageNum, true);
         isSplit = false;
       } else {
         std::cout << "Leaf split case" << std::endl;
@@ -636,6 +636,8 @@ class BTreeIndex {
         *splitKey = middleKey;
         isSplit = true;
         splitRightNodePageId = newPageNum;
+        this->bufMgr->unPinPage(this->file, newPageNum, true);
+        this->bufMgr->unPinPage(this->file, pageNum, true);
       }
     } else if (this->attributeType == Datatype::DOUBLE) {
       // TODO
@@ -684,12 +686,12 @@ class BTreeIndex {
 
   template <typename T>
   bool hasSpaceInLeafNode(T *leafNode) {
-    return leafNode->len != IDEAL_OCCUPANCY * this->leafOccupancy;
+    return leafNode->len < IDEAL_OCCUPANCY * this->leafOccupancy;
   }
 
   template <typename T>
   bool hasSpaceInNonLeafNode(T *nonLeafNode) {
-    return nonLeafNode->len != IDEAL_OCCUPANCY * this->nodeOccupancy;
+    return nonLeafNode->len < IDEAL_OCCUPANCY * this->nodeOccupancy;
   }
 
   template <class T>
@@ -719,7 +721,7 @@ class BTreeIndex {
         pageNoArray[i + 2] = tempPageNoArray[i + 1];
       }
     } else {
-      // it means key needs to be inserted at the last
+      // It means key needs to be inserted at the last
       keyArray[len] = key;
       pageNoArray[len + 1] = pageNo;
     }

@@ -341,11 +341,11 @@ const void BTreeIndex::insertEntry(const void *key, const RecordId rid) {
         rootLeafNode->rightSibPageNo = newPageNum;
 
         // Create root node non leaf page
-        Page *rootPage;
-        PageId rootPageNum;
-        bufMgr->allocPage(this->file, rootPageNum, rootPage);
-        this->rootPageNum = rootPageNum;
-        NonLeafNodeInt *rootNonLeafNode = (NonLeafNodeInt *)rootPage;
+        Page *newRootPage;
+        PageId newRootPageNum;
+        bufMgr->allocPage(this->file, newRootPageNum, newRootPage);
+        this->rootPageNum = newRootPageNum;
+        NonLeafNodeInt *rootNonLeafNode = (NonLeafNodeInt *)newRootPage;
         rootNonLeafNode->level = 1;  // Since this is the node above the leaf
         // Copy up the middle key to root;
         rootNonLeafNode->keyArray[0] = middleKey;
@@ -379,7 +379,6 @@ void BTreeIndex::insertRecursive(PageId nodePageNumber, const void *key,
   // Read current page
   Page *curPage;
   bufMgr->readPage(this->file, nodePageNumber, curPage);
-  bufMgr->unPinPage(this->file, nodePageNumber, false);
   if (this->attributeType == Datatype::INTEGER) {
     // Cast it to non leaf
     NonLeafNodeInt *curNode = (NonLeafNodeInt *)curPage;
@@ -436,7 +435,7 @@ void BTreeIndex::insertRecursive(PageId nodePageNumber, const void *key,
           Page *newRootPage;
           PageId newRootPageNum;
           // Unpin current root page
-          this->bufMgr->unPinPage(this->file, this->rootPageNum, false);
+          this->bufMgr->unPinPage(this->file, this->rootPageNum, true);
           this->bufMgr->allocPage(this->file, newRootPageNum, newRootPage);
           // Cast to non leaf node int
           NonLeafNodeInt* nonLeafRootNodeInt = (NonLeafNodeInt*) newRootPage;
@@ -448,6 +447,7 @@ void BTreeIndex::insertRecursive(PageId nodePageNumber, const void *key,
         }
       }
     }
+    bufMgr->unPinPage(this->file, nodePageNumber, true);
   } else if (this->attributeType == Datatype::DOUBLE) {
     // TODO
   } else if (this->attributeType == Datatype::STRING) {
