@@ -439,7 +439,7 @@ void BTreeIndex::insertRecursive(PageId nodePageNumber, const void *key,
           this->bufMgr->unPinPage(this->file, this->rootPageNum, true);
           this->bufMgr->allocPage(this->file, newRootPageNum, newRootPage);
           // Cast to non leaf node int
-          NonLeafNodeInt* nonLeafRootNodeInt = (NonLeafNodeInt*) newRootPage;
+          NonLeafNodeInt *nonLeafRootNodeInt = (NonLeafNodeInt *)newRootPage;
           nonLeafRootNodeInt->keyArray[0] = splitKey;
           nonLeafRootNodeInt->pageNoArray[0] = nodePageNumber;
           nonLeafRootNodeInt->pageNoArray[1] = splitRightNodePageId;

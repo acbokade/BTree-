@@ -10,8 +10,8 @@
 
 #include <limits.h>
 
-#include <iostream>
 #include <algorithm>
+#include <iostream>
 #include <sstream>
 #include <string>
 
@@ -541,24 +541,28 @@ class BTreeIndex {
         PageId newPageNum;
         bufMgr->allocPage(this->file, newPageNum, newPage);
         // Cast new page to non leaf node int
-        NonLeafNodeInt* newNonLeafNodeInt = (NonLeafNodeInt*) newPage;
+        NonLeafNodeInt *newNonLeafNodeInt = (NonLeafNodeInt *)newPage;
         newNonLeafNodeInt->len = 0;
         // New key array length - curNonLeafNode->len + 1
         int splitKeyIndex = (curNonLeafNode->len) / 2;
         int newSplitKey = tempKeyArray[splitKeyIndex];
-        // Ignore key at splitKeyIndex and move all the keys after that to new node
-        for (int i=0;i<splitKeyIndex;i++) {
+        // Ignore key at splitKeyIndex and move all the keys after that to new
+        // node
+        for (int i = 0; i < splitKeyIndex; i++) {
           curNonLeafNode->keyArray[i] = tempKeyArray[i];
         }
         curNonLeafNode->len = splitKeyIndex;
         curNonLeafNode->pageNoArray[splitKeyIndex] = splitRightNodePageId;
-        // Need to move every page number after index splitIndex+1 to new page node
-        for (int i=splitKeyIndex+1;i<curNonLeafNode->len+1;i++) {
-          newNonLeafNodeInt->keyArray[i-splitKeyIndex-1] = tempKeyArray[i];
-          newNonLeafNodeInt->pageNoArray[i-splitKeyIndex-1] = tempPageNoArray[i];
+        // Need to move every page number after index splitIndex+1 to new page
+        // node
+        for (int i = splitKeyIndex + 1; i < curNonLeafNode->len + 1; i++) {
+          newNonLeafNodeInt->keyArray[i - splitKeyIndex - 1] = tempKeyArray[i];
+          newNonLeafNodeInt->pageNoArray[i - splitKeyIndex - 1] =
+              tempPageNoArray[i];
           newNonLeafNodeInt->len += 1;
         }
-        newNonLeafNodeInt->pageNoArray[curNonLeafNode->len-splitKeyIndex] = tempKeyArray[curNonLeafNode->len+1];
+        newNonLeafNodeInt->pageNoArray[curNonLeafNode->len - splitKeyIndex] =
+            tempKeyArray[curNonLeafNode->len + 1];
 
         // Set the splitKey and splitRightNodePageId
         *splitKey = newSplitKey;
@@ -578,14 +582,13 @@ class BTreeIndex {
     this->bufMgr->readPage(this->file, pageNum, curPage);
     if (this->attributeType == Datatype::INTEGER) {
       // Cast to LeafNode
-      LeafNodeInt* curLeafNode = (LeafNodeInt *)curPage;
+      LeafNodeInt *curLeafNode = (LeafNodeInt *)curPage;
       // Check the occupancy of the leaf node
       if (hasSpaceInLeafNode(curLeafNode)) {
         // SubCase 1: Non-Split
         // Insert the (key, record)
         insertKeyRidToKeyRidArray<int>(curLeafNode->keyArray,
-                                       curLeafNode->ridArray, 
-                                       curLeafNode->len,
+                                       curLeafNode->ridArray, curLeafNode->len,
                                        key, rid);
         curLeafNode->len += 1;
         this->bufMgr->unPinPage(this->file, pageNum, true);
