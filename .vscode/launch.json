@@ -9,11 +9,13 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}\\Btree-SP-23\\Btree\\src\\badgerdb_main",
-            "args": [],
             "stopAtEntry": true,
             "MIMode": "gdb",
             "cwd": "${workspaceFolder}",
-            "miDebuggerPath": "C:/MinGW/bin/gdb.exe",
+            "miDebuggerPath": "/usr/bin/gdb",
+            "args": [
+                "1"
+            ]
         }
     ]
 }
