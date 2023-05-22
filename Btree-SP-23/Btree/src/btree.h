@@ -518,6 +518,7 @@ class BTreeIndex {
             curNonLeafNode->len, keyCopy, splitRightNodePageId);
         // Set isSplit to false
         isSplit = false;
+        curNonLeafNode->len += 1;
         this->bufMgr->unPinPage(this->file, nodePageNumber, true);
       } else {
         // Split and move up the middleKey
@@ -586,6 +587,7 @@ class BTreeIndex {
                                        curLeafNode->ridArray, 
                                        curLeafNode->len,
                                        key, rid);
+        curLeafNode->len += 1;
         this->bufMgr->unPinPage(this->file, pageNum, true);
         isSplit = false;
       } else {
