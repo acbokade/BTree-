@@ -14,6 +14,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <vector>
 
 #include "buffer.h"
 #include "file.h"
@@ -512,7 +513,7 @@ class BTreeIndex {
       // Check if space exists
       if (hasSpaceInNonLeafNode(curNonLeafNode)) {
         // Insert the key and rightPageId
-        int keyCopy = *(int *)middleKey;
+        int keyCopy = middleKey;
         insertKeyPageIdToKeyPageIdArray<int>(
             curNonLeafNode->keyArray, curNonLeafNode->pageNoArray,
             curNonLeafNode->len, keyCopy, splitRightNodePageId);
@@ -608,7 +609,7 @@ class BTreeIndex {
         }
         // Insert current key, rid
         RIDKeyPair<int> ridKeyPair;
-        ridKeyPair.set(rid, *(int *)key);
+        ridKeyPair.set(rid, key);
         ridKeyPairVec.push_back(ridKeyPair);
         // Sort the vector
         sort(ridKeyPairVec.begin(), ridKeyPairVec.end());
@@ -793,29 +794,29 @@ class BTreeIndex {
 // void insertKeyPageIdToKeyPageIdArray<int>(int keyArray[], PageId
 // pageNoArray[],
 //                                           int len, int key, PageId pageNo)
-template void BTreeIndex::insertKeyRidToKeyRidArray<int>(int keyArray[],
-                                                         RecordId ridArray[],
-                                                         int len, int key,
-                                                         const RecordId rid);
+// template void BTreeIndex::insertKeyRidToKeyRidArray<int>(int keyArray[],
+//                                                          RecordId ridArray[],
+//                                                          int len, int key,
+//                                                          const RecordId rid);
 
-template bool BTreeIndex::hasSpaceInLeafNode<LeafNodeInt>(
-    LeafNodeInt *leafNode);
+// template bool BTreeIndex::hasSpaceInLeafNode<LeafNodeInt>(
+//     LeafNodeInt *leafNode);
 
-template bool BTreeIndex::hasSpaceInNonLeafNode<NonLeafNodeInt>(
-    NonLeafNodeInt *nonLeafNode);
+// template bool BTreeIndex::hasSpaceInNonLeafNode<NonLeafNodeInt>(
+//     NonLeafNodeInt *nonLeafNode);
 
-template void BTreeIndex::insertKeyPageIdToKeyPageIdArray<int>(
-    int keyArray[], PageId pageNoArray[], int len, int key, PageId pageNo);
+// template void BTreeIndex::insertKeyPageIdToKeyPageIdArray<int>(
+//     int keyArray[], PageId pageNoArray[], int len, int key, PageId pageNo);
 
-template void BTreeIndex::insertNonLeaf<int>(PageId nodePageNumber,
-                                             int nextPageIndex, int key,
-                                             bool &isSplit, int *splitKey,
-                                             PageId &splitRightNodePageId);
+// template void BTreeIndex::insertNonLeaf<int>(PageId nodePageNumber,
+//                                              int nextPageIndex, int key,
+//                                              bool &isSplit, int *splitKey,
+//                                              PageId &splitRightNodePageId);
 
-template void BTreeIndex::insertLeaf<int>(PageId pageNum, int key,
-                                          const RecordId rid, bool &isSplit,
-                                          int *splitKey,
-                                          PageId &splitRightNodePageId);
+// template void BTreeIndex::insertLeaf<int>(PageId pageNum, int key,
+//                                           const RecordId rid, bool &isSplit,
+//                                           int *splitKey,
+//                                           PageId &splitRightNodePageId);
 }  // namespace badgerdb
 
 // #include "btree.cpp"
