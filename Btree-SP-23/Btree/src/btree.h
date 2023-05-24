@@ -70,7 +70,7 @@ const int DOUBLEARRAYLEAFSIZE =
 //                                                    sibling ptr           key
 //                                                    rid
 const int STRINGARRAYLEAFSIZE =
-    (Page::SIZE - sizeof(PageId)) / (10 * sizeof(char) + sizeof(RecordId));
+    (Page::SIZE - sizeof(PageId) - sizeof(int)) / (10 * sizeof(char) + sizeof(RecordId));
 
 /**
  * @brief Number of key slots in B+Tree non-leaf for INTEGER key.
@@ -98,7 +98,7 @@ const int DOUBLEARRAYNONLEAFSIZE =
 //                                                        level        extra
 //                                                        pageNo             key
 //                                                        pageNo
-const int STRINGARRAYNONLEAFSIZE = (Page::SIZE - sizeof(int) - sizeof(PageId)) /
+const int STRINGARRAYNONLEAFSIZE = (Page::SIZE - 2*sizeof(int) - sizeof(PageId)) /
                                    (10 * sizeof(char) + sizeof(PageId));
 
 /**
@@ -261,6 +261,7 @@ struct NonLeafNodeString {
    * nodes in the tree.
    */
   PageId pageNoArray[STRINGARRAYNONLEAFSIZE + 1];
+  int len;
 };
 
 /**
@@ -515,7 +516,7 @@ class BTreeIndex {
       // Check if space exists
       if (hasSpaceInNonLeafNode(curNonLeafNode)) {
         // Insert the key and rightPageId
-        int keyCopy = middleKey;
+        T keyCopy = middleKey;
         insertKeyPageIdToKeyPageIdArray<int>(
             curNonLeafNode->keyArray, curNonLeafNode->pageNoArray,
             curNonLeafNode->len, keyCopy, splitRightNodePageId);
@@ -651,7 +652,75 @@ class BTreeIndex {
         this->bufMgr->unPinPage(this->file, newPageNum, true);
       }
     } else if (this->attributeType == Datatype::STRING) {
+      NonLeafNodeString *curNonLeafNode = (NonLeafNodeString *)curPage;
+      // Check if space exists
+      if (hasSpaceInNonLeafNode(curNonLeafNode)) {
+        // Insert the key and rightPageId
+        std::string keyCopy = middleKey;
+        insertKeyPageIdToKeyPageIdArrayForString(
+            curNonLeafNode->keyArray, curNonLeafNode->pageNoArray,
+            curNonLeafNode->len, keyCopy, splitRightNodePageId);
+        // Set isSplit to false
+        isSplit = false;
+        curNonLeafNode->len += 1;
+        this->bufMgr->unPinPage(this->file, nodePageNumber, true);
+      } else {
+        std::cout<<"Non leaf split case"<<std::endl;
+        // Split and move up the middleKey
+        // nextPageIndex is the index in the pageNoArray whose page was selected
+        // while recursively inserting the key Insert the splitRightNodePageId
+        // after the nextPageIndex in the pageNoArray
+        PageId tempPageNoArray[curNonLeafNode->len + 2];
+        std::string tempKeyArray[curNonLeafNode->len + 1];
+        for (int i = curNonLeafNode->len; i >= nextPageIndex + 1; i--) {
+          tempPageNoArray[i + 1] = curNonLeafNode->pageNoArray[i];
+          tempKeyArray[i] = curNonLeafNode->keyArray[i - 1];
+        }
+        // Insert splitRightNodePageId at nextPageIndex + 1
+        tempPageNoArray[nextPageIndex + 1] = splitRightNodePageId;
+        // Insert middleKey at nextPageIndex
+        tempKeyArray[nextPageIndex] = middleKey;
 
+        // Create new page for the split
+        Page *newPage;
+        PageId newPageNum;
+        bufMgr->allocPage(this->file, newPageNum, newPage);
+        // Cast new page to non leaf node int
+        NonLeafNodeString *newNonLeafNodeInt = (NonLeafNodeString *)newPage;
+        newNonLeafNodeInt->len = 0;
+        newNonLeafNodeInt->level = curNonLeafNode->level;
+        // New key array length - curNonLeafNode->len + 1
+        int splitKeyIndex = (curNonLeafNode->len) / 2;
+        std::string newSplitKey = tempKeyArray[splitKeyIndex];
+        // Ignore key at splitKeyIndex and move all the keys after that to new
+        // node
+        for (int i = 0; i < splitKeyIndex; i++) {
+          curNonLeafNode->keyArray[i] = tempKeyArray[i];
+        }
+        curNonLeafNode->len = splitKeyIndex;
+        std::cout<<"cur non leaf node with page id "<<nodePageNumber<<" has length "<<curNonLeafNode->len<<std::endl;
+
+        curNonLeafNode->pageNoArray[splitKeyIndex] = splitRightNodePageId;
+        // Need to move every page number after index splitIndex+1 to new page
+        // node
+        for (int i = splitKeyIndex + 1; i < curNonLeafNode->len + 1; i++) {
+          newNonLeafNodeInt->keyArray[i - splitKeyIndex - 1] = tempKeyArray[i];
+          newNonLeafNodeInt->pageNoArray[i - splitKeyIndex - 1] =
+              tempPageNoArray[i];
+          newNonLeafNodeInt->len += 1;
+        }
+        std::cout<<"new non leaf node with page id "<<newPageNum<<" has length "<<newNonLeafNodeInt->len<<std::endl;
+
+        newNonLeafNodeInt->pageNoArray[curNonLeafNode->len - splitKeyIndex] =
+            tempKeyArray[curNonLeafNode->len + 1];
+
+        // Set the splitKey and splitRightNodePageId
+        *splitKey = newSplitKey;
+        splitRightNodePageId = newPageNum;
+
+        this->bufMgr->unPinPage(this->file, nodePageNumber, true);
+        this->bufMgr->unPinPage(this->file, newPageNum, true);
+      }
     }
   }
 
@@ -799,7 +868,72 @@ class BTreeIndex {
         this->bufMgr->unPinPage(this->file, pageNum, true);
       }
     } else if (this->attributeType == Datatype::STRING) {
-      // TODO
+      // Cast to LeafNode
+      LeafNodeString *curLeafNode = (LeafNodeString *)curPage;
+      // Check the occupancy of the leaf node
+      if (hasSpaceInLeafNode(curLeafNode)) {
+        // SubCase 1: Non-Split
+        // Insert the (key, record)
+        insertKeyRidToKeyRidArrayForString(curLeafNode->keyArray,
+                                       curLeafNode->ridArray, curLeafNode->len,
+                                       key, rid);
+        curLeafNode->len += 1;
+        this->bufMgr->unPinPage(this->file, pageNum, true);
+        isSplit = false;
+      } else {
+        std::cout << "Leaf split case" << std::endl;
+        // SubCase 2: Split the leaf-node
+        std::vector<RIDKeyPair<std::string>> ridKeyPairVec;
+        // Insert all the key, rid pairs including current key, rid to be
+        // inserted
+        for (int i = 0; i < curLeafNode->len; i++) {
+          RIDKeyPair<std::string> ridKeyPair;
+          const RecordId rid_ = curLeafNode->ridArray[i];
+          std::string key_ = curLeafNode->keyArray[i];
+          ridKeyPair.set(rid_, key_);
+          ridKeyPairVec.push_back(ridKeyPair);
+        }
+        // Insert current key, rid
+        RIDKeyPair<std::string> ridKeyPair;
+        ridKeyPair.set(rid, key);
+        ridKeyPairVec.push_back(ridKeyPair);
+        // Sort the vector
+        sort(ridKeyPairVec.begin(), ridKeyPairVec.end());
+        int middleKeyIndex = ridKeyPairVec.size() / 2;
+        std::string middleKey = ridKeyPairVec[middleKeyIndex].key;
+
+        // Create another page and move half the (key, recordID) to that node
+        Page *newPage;
+        PageId newPageNum;
+        bufMgr->allocPage(this->file, newPageNum, newPage);
+        // Move half the (key, recordID) to the new node
+        // Cast the page to leaf node
+        LeafNodeString *newPageLeafNode = (LeafNodeString *)newPage;
+        newPageLeafNode->len = 0;
+        for (int i = middleKeyIndex; i < ridKeyPairVec.size(); i++) {
+          std::string key_ = ridKeyPairVec[i].key;
+          RecordId rid_ = ridKeyPairVec[i].rid;
+          insertKeyRidToKeyRidArrayForString(newPageLeafNode->keyArray,
+                                         newPageLeafNode->ridArray,
+                                         newPageLeafNode->len, key_, rid_);
+          newPageLeafNode->len += 1;
+        }
+        std::cout<<"new leaf node with page id "<<newPageNum<<" has length "<<newPageLeafNode->len<<std::endl;
+
+        curLeafNode->len = middleKeyIndex;
+        std::cout<<"cur leaf node with page id "<<pageNum<<" has length "<<curLeafNode->len<<std::endl;
+
+        // Set next page id of left leaf node
+        newPageLeafNode->rightSibPageNo = curLeafNode->rightSibPageNo;
+        curLeafNode->rightSibPageNo = newPageNum;
+
+        // For leaf node, middle key is inserted in the leaf as well as copied
+        // to non-leaf
+        *splitKey = middleKey;
+        isSplit = true;
+        splitRightNodePageId = newPageNum;
+        this->bufMgr->unPinPage(this->file, newPageNum, true);
+        this->bufMgr->unPinPage(this->file, pageNum, true);
     }
   }
 
@@ -838,6 +972,44 @@ class BTreeIndex {
     } else {
       // it means key needs to be inserted at the last
       keyArray[len] = key;
+      ridArray[len] = rid;
+    }
+  }
+
+  void insertKeyRidToKeyRidArrayForString(char keyArray[][10], RecordId ridArray[], int len,
+                                 std::string key, const RecordId rid) {
+    if (len == 0) {
+      strcpy(keyArray[0], key.c_str());
+      ridArray[0] = rid;
+      return;
+    }
+    bool foundKeyIndex = false;
+    int keyIndex =
+        -1;  // keyIndex is the index just before which to insert the given key
+    for (int i = 0; i < len; i++) {
+      if (keyArray[i] >= key) {
+        keyIndex = i;
+        foundKeyIndex = true;
+        break;
+      }
+    }
+    if (foundKeyIndex) {
+      char tempKeyArray[len + 1][10];
+      RecordId tempRidArray[len + 1];
+      for (int i = 0; i < len; i++) {
+        strcpy(tempKeyArray[i], keyArray[i]);
+        tempRidArray[i] = ridArray[i];
+      }
+      // Insert key before index keyIndex
+      strcpy(keyArray[keyIndex], key.c_str());
+      ridArray[keyIndex] = rid;
+      for (int i = keyIndex; i < len; i++) {
+        strcpy(keyArray[i+1], tempKeyArray[i]);
+        ridArray[i + 1] = tempRidArray[i];
+      }
+    } else {
+      // it means key needs to be inserted at the last
+      strcpy(keyArray[len], key.c_str());
       ridArray[len] = rid;
     }
   }
@@ -883,6 +1055,40 @@ class BTreeIndex {
     } else {
       // It means key needs to be inserted at the last
       keyArray[len] = key;
+      pageNoArray[len + 1] = pageNo;
+    }
+  }
+
+  void insertKeyPageIdToKeyPageIdArrayForString(char keyArray[][10], PageId pageNoArray[],
+                                       int len, std::string key, PageId pageNo) {
+    bool foundKeyIndex = false;
+    int keyIndex =
+        -1;  // keyIndex is the index just before which to insert the given key
+    for (int i = 0; i < len; i++) {
+      if (keyArray[i] >= key) {
+        keyIndex = i;
+        foundKeyIndex = true;
+        break;
+      }
+    }
+    if (foundKeyIndex) {
+      char tempKeyArray[len + 1][10];
+      PageId tempPageNoArray[len + 2];
+      for (int i = 0; i < len; i++) {
+        strcpy(tempKeyArray[i], keyArray[i]);
+        tempPageNoArray[i] = pageNoArray[i];
+      }
+      tempPageNoArray[len] = pageNoArray[len];
+      // Insert key before index keyIndex
+      strcpy(keyArray[keyIndex], key.c_str());
+      pageNoArray[keyIndex + 1] = pageNo;
+      for (int i = keyIndex+1; i <= len; i++) {
+        strcpy(keyArray[keyIndex], tempKeyArray[i-1]);
+        pageNoArray[i + 1] = tempPageNoArray[i];
+      }
+    } else {
+      // It means key needs to be inserted at the last
+      strcpy(keyArray[len], key.c_str());
       pageNoArray[len + 1] = pageNo;
     }
   }
