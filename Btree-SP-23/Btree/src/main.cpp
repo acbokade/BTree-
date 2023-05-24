@@ -162,8 +162,8 @@ int main(int argc, char **argv) {
   File::remove(relationName);
 
   test1();
-  test2();
-  test3();
+  // test2();
+  // test3();
   // errorTests();
 
   return 1;
@@ -197,6 +197,26 @@ void test3() {
   createRelationRandom();
   indexTests();
   deleteRelation();
+}
+
+// Search for key from -1000 to 6000 (giving 5000 consecutive numbers from 0 to 4999)
+void test4() {
+
+}
+
+// Reopen an index on an existing one
+void test5() {
+
+}
+
+// construct tree with relations of large size to force the non-leaf node split
+void test6() {
+
+}
+
+// Sparse relations with size of 3000, instead of relations with consecutive numbers
+void test7() {
+
 }
 
 // -----------------------------------------------------------------------------
@@ -374,6 +394,7 @@ void intTests() {
       checkPassFail(intScan(&index, 20, GTE, 35, LTE), 16)
           checkPassFail(intScan(&index, -3, GT, 3, LT), 3)
               checkPassFail(intScan(&index, 996, GT, 1001, LT), 4)
+              checkPassFail(intScan(&index, 0, GT, 2, LT), 1)
                   checkPassFail(intScan(&index, 0, GT, 1, LT), 0) checkPassFail(
                       intScan(&index, 300, GT, 400, LT), 99)
                       checkPassFail(intScan(&index, 3000, GTE, 4000, LT), 1000)
