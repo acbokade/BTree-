@@ -175,8 +175,10 @@ void BufMgr::flushFile(const File* file)
   	BufDesc* tmpbuf = &(bufDescTable[i]);
   	if(tmpbuf->valid == true && tmpbuf->file == file)
 		{
-	    if (tmpbuf->pinCnt > 0)
+	    if (tmpbuf->pinCnt > 0) {
+        std::cout<<"######"<<tmpbuf->pinCnt<<"#########"<<std::endl;
   			throw PagePinnedException(file->filename(), tmpbuf->pageNo, tmpbuf->frameNo);
+      }
 
 	    if (tmpbuf->dirty == true)
 			{

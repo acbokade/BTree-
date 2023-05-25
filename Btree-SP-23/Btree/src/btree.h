@@ -711,11 +711,11 @@ class BTreeIndex {
         newNonLeafNodeString->level = curNonLeafNode->level;
         // New key array length - curNonLeafNode->len + 1
         int splitKeyIndex = (curNonLeafNode->len) / 2;
-        std::string newSplitKey = tempKeyArray[splitKeyIndex];
+        std::string newSplitKey(tempKeyArray[splitKeyIndex], STRINGSIZE);
         // Ignore key at splitKeyIndex and move all the keys after that to new
         // node
         for (int i = 0; i < splitKeyIndex; i++) {
-          strcpy(curNonLeafNode->keyArray[i], tempKeyArray[i].c_str());
+          strncpy(curNonLeafNode->keyArray[i], tempKeyArray[i].c_str(), STRINGSIZE);
         }
         curNonLeafNode->len = splitKeyIndex;
         std::cout<<"cur non leaf node with page id "<<nodePageNumber<<" has length "<<curNonLeafNode->len<<std::endl;
@@ -724,7 +724,7 @@ class BTreeIndex {
         // Need to move every page number after index splitIndex+1 to new page
         // node
         for (int i = splitKeyIndex + 1; i < curNonLeafNode->len + 1; i++) {
-          strcpy(newNonLeafNodeString->keyArray[i - splitKeyIndex - 1] , tempKeyArray[i].c_str());
+          strncpy(newNonLeafNodeString->keyArray[i - splitKeyIndex - 1] , tempKeyArray[i].c_str(), STRINGSIZE);
           newNonLeafNodeString->pageNoArray[i - splitKeyIndex - 1] =
               tempPageNoArray[i];
           newNonLeafNodeString->len += 1;
@@ -908,7 +908,7 @@ class BTreeIndex {
         for (int i = 0; i < curLeafNode->len; i++) {
           RIDKeyPair<std::string> ridKeyPair;
           const RecordId rid_ = curLeafNode->ridArray[i];
-          std::string key_ = curLeafNode->keyArray[i];
+          std::string key_(curLeafNode->keyArray[i], STRINGSIZE);
           ridKeyPair.set(rid_, key_);
           ridKeyPairVec.push_back(ridKeyPair);
         }
@@ -999,7 +999,7 @@ class BTreeIndex {
   void insertKeyRidToKeyRidArrayForString(char keyArray[][10], RecordId ridArray[], int len,
                                  std::string key, const RecordId rid) {
     if (len == 0) {
-      strcpy(keyArray[0], key.c_str());
+      strncpy(keyArray[0], key.c_str(), STRINGSIZE);
       ridArray[0] = rid;
       return;
     }
@@ -1017,18 +1017,18 @@ class BTreeIndex {
       char tempKeyArray[len + 1][10];
       RecordId tempRidArray[len + 1];
       for (int i = 0; i < len; i++) {
-        strcpy(tempKeyArray[i], keyArray[i]);
+        strncpy(tempKeyArray[i], keyArray[i], STRINGSIZE);
         tempRidArray[i] = ridArray[i];
       }
       // Insert key before index keyIndex
-      strcpy(keyArray[keyIndex], key.c_str());
+      strncpy(keyArray[keyIndex], key.c_str(), STRINGSIZE);
       ridArray[keyIndex] = rid;
       for (int i = keyIndex; i < len; i++) {
-        strcpy(keyArray[i+1], tempKeyArray[i]);
+        strncpy(keyArray[i+1], tempKeyArray[i], STRINGSIZE);
         ridArray[i + 1] = tempRidArray[i];
       }
     } else {
-      // it means key needs to be inserted at the last
+      // It means key needs to be inserted at the last
       strncpy(keyArray[len], key.c_str(), 10);
       ridArray[len] = rid;
     }
@@ -1095,20 +1095,20 @@ class BTreeIndex {
       char tempKeyArray[len + 1][10];
       PageId tempPageNoArray[len + 2];
       for (int i = 0; i < len; i++) {
-        strcpy(tempKeyArray[i], keyArray[i]);
+        strncpy(tempKeyArray[i], keyArray[i], STRINGSIZE);
         tempPageNoArray[i] = pageNoArray[i];
       }
       tempPageNoArray[len] = pageNoArray[len];
       // Insert key before index keyIndex
-      strcpy(keyArray[keyIndex], key.c_str());
+      strncpy(keyArray[keyIndex], key.c_str(), STRINGSIZE);
       pageNoArray[keyIndex + 1] = pageNo;
       for (int i = keyIndex+1; i <= len; i++) {
-        strcpy(keyArray[keyIndex], tempKeyArray[i-1]);
+        strncpy(keyArray[i], tempKeyArray[i-1], STRINGSIZE);
         pageNoArray[i + 1] = tempPageNoArray[i];
       }
     } else {
       // It means key needs to be inserted at the last
-      strcpy(keyArray[len], key.c_str());
+      strncpy(keyArray[len], key.c_str(), STRINGSIZE);
       pageNoArray[len + 1] = pageNo;
     }
   }
