@@ -70,19 +70,34 @@ BufMgr *bufMgr = new BufMgr(100);
 void createRelationForward();
 void createRelationBackward();
 void createRelationRandom();
+void createSparseRelation(int relSize);
+void createRelationTest4(int start, int end);
 void intTests();
+void intTestsSparseRelation();
+void intTestsTest4();
 int intScan(BTreeIndex *index, int lowVal, Operator lowOp, int highVal,
             Operator highOp);
 void indexTests();
+void indexTestsSparseRelation();
+void indexTestsTest4();
+void indexTestsWithoutDeletion();
 void doubleTests();
+void doubleTestsSparseRelation();
+void doubleTestsTest4();
 int doubleScan(BTreeIndex *index, double lowVal, Operator lowOp, double highVal,
                Operator highOp);
 void stringTests();
+void stringTestsSparseRelation();
+void stringTestsTest4();
 int stringScan(BTreeIndex *index, int lowVal, Operator lowOp, int highVal,
                Operator highOp);
 void test1();
 void test2();
 void test3();
+void test4();
+void test5();
+void test6();
+void test7();
 void errorTests();
 void deleteRelation();
 
@@ -162,9 +177,12 @@ int main(int argc, char **argv) {
   File::remove(relationName);
 
   // test1();
-  test2();
+  // test2();
   // test3();
   // errorTests();
+  // test4();
+  test5();
+  // test7();
 
   return 1;
 }
@@ -199,37 +217,34 @@ void test3() {
   deleteRelation();
 }
 
-// Search for key from -1000 to 6000 (giving 5000 consecutive numbers from 0 to 4999)
+// Search for key from -1000 to 6000 (giving 5000 consecutive numbers from 0 to
+// 4999)
 void test4() {
-  
+  createRelationTest4(-1000, 6000);
+  indexTestsTest4();
+  deleteRelation();
 }
 
 // Reopen an index on an existing one
 void test5() {
-  createRelationForward();
-  // Run index tests without deleting the index file
-  if (testNum == 1) {
-    intTests();
-  } else if (testNum == 2) {
-    doubleTests();
-  } else if (testNum == 3) {
-    stringTests();
-  }
+  // Create Index
+  createRelationForward(); 
+  // Reopen Index 
   // Re-run index tests
+  indexTestsWithoutDeletion();
   indexTests();
   deleteRelation();
 }
 
 // construct tree with relations of large size to force the non-leaf node split
-void test6() {
+void test6() {}
 
-}
-
-// Sparse relations with size of 3000, instead of relations with consecutive numbers
+// Sparse relations with size of 3000, instead of relations with consecutive
+// numbers
 void test7() {
-  // createSparseRelation(3000);
-  // indexTestsSparseRelation();
-  // deleteRelation();
+  createSparseRelation(3000);
+  indexTestsSparseRelation();
+  deleteRelation();
 }
 
 // -----------------------------------------------------------------------------
@@ -290,7 +305,42 @@ void createSparseRelation(int relSize) {
 
   // Insert a bunch of tuples into the relation.
   for (int i = 0; i < relSize; i++) {
-    int key = i*100;
+    int key = i * 100;
+    sprintf(record1.s, "%05d string record", key);
+    record1.i = key;
+    record1.d = (double)key;
+    std::string new_data(reinterpret_cast<char *>(&record1), sizeof(record1));
+
+    while (1) {
+      try {
+        new_page.insertRecord(new_data);
+        break;
+      } catch (InsufficientSpaceException e) {
+        file1->writePage(new_page_number, new_page);
+        new_page = file1->allocatePage(new_page_number);
+      }
+    }
+  }
+
+  file1->writePage(new_page_number, new_page);
+}
+
+void createRelationTest4(int start, int end) {
+  // destroy any old copies of relation file
+  try {
+    File::remove(relationName);
+  } catch (FileNotFoundException e) {
+  }
+
+  file1 = new PageFile(relationName, true);
+
+  // initialize all of record1.s to keep purify happy
+  memset(record1.s, ' ', sizeof(record1.s));
+  PageId new_page_number;
+  Page new_page = file1->allocatePage(new_page_number);
+
+  // Insert a bunch of tuples into the relation.
+  for (int i = start; i < end; i++) {
     sprintf(record1.s, "%05d string record", i);
     record1.i = i;
     record1.d = (double)i;
@@ -430,27 +480,59 @@ void indexTests() {
   }
 }
 
-// void indexTestsSparseRelation() {
-//   if (testNum == 1) {
-//     intTestsSparseRelation();
-//     try {
-//       File::remove(intIndexName);
-//     } catch (FileNotFoundException e) {
-//     }
-//   } else if (testNum == 2) {
-//     doubleTestsSparseRelation();
-//     try {
-//       File::remove(doubleIndexName);
-//     } catch (FileNotFoundException e) {
-//     }
-//   } else if (testNum == 3) {
-//     stringTestsSparseRelation();
-//     try {
-//       File::remove(stringIndexName);
-//     } catch (FileNotFoundException e) {
-//     }
-//   }
-// }
+void indexTestsWithoutDeletion() {
+  if (testNum == 1) {
+    intTests();
+  } else if (testNum == 2) {
+    doubleTests();
+  } else if (testNum == 3) {
+    stringTests();
+  }
+}
+
+void indexTestsSparseRelation() {
+  if (testNum == 1) {
+    intTestsSparseRelation();
+    try {
+      File::remove(intIndexName);
+    } catch (FileNotFoundException e) {
+    }
+  } else if (testNum == 2) {
+    doubleTestsSparseRelation();
+    try {
+      File::remove(doubleIndexName);
+    } catch (FileNotFoundException e) {
+    }
+  } else if (testNum == 3) {
+    stringTestsSparseRelation();
+    try {
+      File::remove(stringIndexName);
+    } catch (FileNotFoundException e) {
+    }
+  }
+}
+
+void indexTestsTest4() {
+  if (testNum == 1) {
+    intTestsTest4();
+    try {
+      File::remove(intIndexName);
+    } catch (FileNotFoundException e) {
+    }
+  } else if (testNum == 2) {
+    doubleTestsTest4();
+    try {
+      File::remove(doubleIndexName);
+    } catch (FileNotFoundException e) {
+    }
+  } else if (testNum == 3) {
+    stringTestsTest4();
+    try {
+      File::remove(stringIndexName);
+    } catch (FileNotFoundException e) {
+    }
+  }
+}
 
 // -----------------------------------------------------------------------------
 // intTests
@@ -467,10 +549,11 @@ void intTests() {
       checkPassFail(intScan(&index, 20, GTE, 35, LTE), 16)
           checkPassFail(intScan(&index, -3, GT, 3, LT), 3)
               checkPassFail(intScan(&index, 996, GT, 1001, LT), 4)
-              checkPassFail(intScan(&index, 0, GT, 2, LT), 1)
-                  checkPassFail(intScan(&index, 0, GT, 1, LT), 0) checkPassFail(
-                      intScan(&index, 300, GT, 400, LT), 99)
-                      checkPassFail(intScan(&index, 3000, GTE, 4000, LT), 1000)
+                  checkPassFail(intScan(&index, 0, GT, 2, LT), 1)
+                      checkPassFail(intScan(&index, 0, GT, 1, LT), 0)
+                          checkPassFail(intScan(&index, 300, GT, 400, LT), 99)
+                              checkPassFail(
+                                  intScan(&index, 3000, GTE, 4000, LT), 1000)
 }
 
 void intTestsSparseRelation() {
@@ -479,37 +562,71 @@ void intTestsSparseRelation() {
   BTreeIndex index(relationName, intIndexName, bufMgr, offsetof(tuple, i),
                    INTEGER);
   std::cout << "Printing to start" << std::endl;
-  // index.printBTree();
   // run some tests
-  checkPassFail(intScan(&index, 25, GT, 40, LT), 0)
-      checkPassFail(intScan(&index, 0, GTE, 100, LTE), 2)
-          checkPassFail(intScan(&index, 0, GT, 1000, LT), 9)
+  checkPassFail(intScan(&index, 0, GT, 1000, LT), 9)
+      checkPassFail(intScan(&index, 10000, GTE, 12000, LTE), 21)
+          checkPassFail(intScan(&index, 200000, GT, 299900, LT), 998)
 }
 
 void doubleTestsSparseRelation() {
   // key - 0, 100, 200, ..., 299900
-  std::cout << "Create a B+ Tree index on the integer field" << std::endl;
-  BTreeIndex index(relationName, intIndexName, bufMgr, offsetof(tuple, i),
+  std::cout << "Create a B+ Tree index on the double field" << std::endl;
+  BTreeIndex index(relationName, intIndexName, bufMgr, offsetof(tuple, d),
                    DOUBLE);
   std::cout << "Printing to start" << std::endl;
-  // index.printBTree();
   // run some tests
-  checkPassFail(doubleScan(&index, 25, GT, 40, LT), 0)
-      checkPassFail(doubleScan(&index, 0, GTE, 100, LTE), 2)
-          checkPassFail(doubleScan(&index, 0, GT, 1000, LT), 9)
+   checkPassFail(doubleScan(&index, 0, GT, 1000, LT), 9)
+      checkPassFail(doubleScan(&index, 10000, GTE, 12000, LTE), 21)
+          checkPassFail(doubleScan(&index, 200000, GT, 299900, LT), 998)
 }
 
 void stringTestsSparseRelation() {
   // key - 0, 100, 200, ..., 299900
-  std::cout << "Create a B+ Tree index on the integer field" << std::endl;
-  BTreeIndex index(relationName, intIndexName, bufMgr, offsetof(tuple, i),
+  std::cout << "Create a B+ Tree index on the string field" << std::endl;
+  BTreeIndex index(relationName, intIndexName, bufMgr, offsetof(tuple, s),
                    STRING);
   std::cout << "Printing to start" << std::endl;
-  // index.printBTree();
   // run some tests
-  checkPassFail(stringScan(&index, 25, GT, 40, LT), 0)
-      checkPassFail(stringScan(&index, 0, GTE, 100, LTE), 2)
-          checkPassFail(stringScan(&index, 0, GT, 1000, LT), 9)
+   checkPassFail(stringScan(&index, 0, GT, 1000, LT), 9)
+      checkPassFail(stringScan(&index, 0, GTE, 2000, LTE), 21)
+          checkPassFail(stringScan(&index, 0, GT, 10000, LT), 99)
+}
+
+void intTestsTest4() {
+  // key - [-1000, 6000]
+  std::cout << "Create a B+ Tree index on the integer field" << std::endl;
+  BTreeIndex index(relationName, intIndexName, bufMgr, offsetof(tuple, i),
+                   INTEGER);
+  std::cout << "Printing to start" << std::endl;
+  // run some tests
+  checkPassFail(intScan(&index, 0, GT, 4999, LT), 4998)
+  checkPassFail(intScan(&index, 0, GTE, 4999, LTE), 5000)
+  checkPassFail(intScan(&index, 0, GT, 4999, LTE), 4999)
+  checkPassFail(intScan(&index, 0, GTE, 4999, LT), 4999)
+}
+
+void doubleTestsTest4() {
+  std::cout << "Create a B+ Tree index on the double field" << std::endl;
+  BTreeIndex index(relationName, intIndexName, bufMgr, offsetof(tuple, d),
+                   DOUBLE);
+  std::cout << "Printing to start" << std::endl;
+  // run some tests
+  checkPassFail(doubleScan(&index, 0, GT, 4999, LT), 4998)
+  checkPassFail(doubleScan(&index, 0, GTE, 4999, LTE), 5000)
+  checkPassFail(doubleScan(&index, 0, GT, 4999, LTE), 4999)
+  checkPassFail(doubleScan(&index, 0, GTE, 4999, LT), 4999)
+}
+
+void stringTestsTest4() {
+  std::cout << "Create a B+ Tree index on the string field" << std::endl;
+  BTreeIndex index(relationName, intIndexName, bufMgr, offsetof(tuple, s),
+                   STRING);
+  std::cout << "Printing to start" << std::endl;
+  // run some tests
+  checkPassFail(stringScan(&index, 0, GT, 4999, LT), 4998)
+  checkPassFail(stringScan(&index, 0, GTE, 4999, LTE), 5000)
+  checkPassFail(stringScan(&index, 0, GT, 4999, LTE), 4999)
+  checkPassFail(stringScan(&index, 0, GTE, 4999, LT), 4999)
 }
 
 int intScan(BTreeIndex *index, int lowVal, Operator lowOp, int highVal,
@@ -660,12 +777,12 @@ void stringTests() {
                    STRING);
 
   // run some tests
-  // checkPassFail(stringScan(&index, 25, GT, 40, LT), 14)
-  //     checkPassFail(stringScan(&index, 20, GTE, 35, LTE), 16)
-  //         checkPassFail(stringScan(&index, -3, GT, 3, LT), 3)
-  //             checkPassFail(stringScan(&index, 996, GT, 1001, LT), 4)
-  //                 checkPassFail(stringScan(&index, 0, GT, 1, LT), 0)
-  //                     checkPassFail(stringScan(&index, 300, GT, 400, LT), 99)
+  checkPassFail(stringScan(&index, 25, GT, 40, LT), 14)
+      checkPassFail(stringScan(&index, 20, GTE, 35, LTE), 16)
+          checkPassFail(stringScan(&index, -3, GT, 3, LT), 3)
+              checkPassFail(stringScan(&index, 996, GT, 1001, LT), 4)
+                  checkPassFail(stringScan(&index, 0, GT, 1, LT), 0)
+                      checkPassFail(stringScan(&index, 300, GT, 400, LT), 99)
                           checkPassFail(stringScan(&index, 3000, GTE, 4000, LT),
                                         1000)
 }
@@ -724,7 +841,7 @@ int stringScan(BTreeIndex *index, int lowVal, Operator lowOp, int highVal,
     }
 
     numResults++;
-    std::cout<<numResults<<std::endl;
+    // std::cout << numResults << std::endl;
   }
 
   if (numResults >= 5) {

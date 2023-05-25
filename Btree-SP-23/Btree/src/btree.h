@@ -876,7 +876,15 @@ class BTreeIndex {
         }
         std::cout<<"new leaf node with page id "<<newPageNum<<" has length "<<newPageLeafNode->len<<std::endl;
 
-        curLeafNode->len = middleKeyIndex;
+        curLeafNode->len = 0;
+        for (int i = 0; i < middleKeyIndex; i++) {
+          double key_ = ridKeyPairVec[i].key;
+          RecordId rid_ = ridKeyPairVec[i].rid;
+          insertKeyRidToKeyRidArray<double>(curLeafNode->keyArray,
+                                         curLeafNode->ridArray,
+                                         curLeafNode->len, key_, rid_);
+          curLeafNode->len += 1;
+        }
         std::cout<<"cur leaf node with page id "<<pageNum<<" has length "<<curLeafNode->len<<std::endl;
 
         // Set next page id of left leaf node
@@ -944,7 +952,16 @@ class BTreeIndex {
         }
         std::cout<<"new leaf node with page id "<<newPageNum<<" has length "<<newPageLeafNode->len<<std::endl;
 
-        curLeafNode->len = middleKeyIndex;
+        curLeafNode->len = 0;
+        for (int i = 0; i < middleKeyIndex; i++) {
+          std::string key_ = ridKeyPairVec[i].key;
+          RecordId rid_ = ridKeyPairVec[i].rid;
+          insertKeyRidToKeyRidArrayForString(curLeafNode->keyArray,
+                                         curLeafNode->ridArray,
+                                         curLeafNode->len, key_, rid_);
+          curLeafNode->len += 1;
+        }
+        // curLeafNode->len = middleKeyIndex;
         std::cout<<"cur leaf node with page id "<<pageNum<<" has length "<<curLeafNode->len<<std::endl;
 
         // Set next page id of left leaf node

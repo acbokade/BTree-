@@ -77,6 +77,7 @@ BTreeIndex::BTreeIndex(const std::string &relationName,
 
   try {
     this->file = new BlobFile(outIndexName, false);
+    std::cout<<"Index file already exists"<<std::endl;
     // Validate the parameters of the method with the index file
     // Find out the meta page of the index file
     // Meta page is always the first page of the index file
@@ -357,7 +358,15 @@ const void BTreeIndex::insertEntry(const void *key, const RecordId rid) {
         std::cout << "new leaf node with page id " << newPageNum
                   << " has length " << newPageLeafNode->len << std::endl;
 
-        rootLeafNode->len = middleKeyIndex;
+        rootLeafNode->len = 0;
+        for (int i = 0; i < middleKeyIndex; i++) {
+          double key_ = ridKeyPairVec[i].key;
+          RecordId rid_ = ridKeyPairVec[i].rid;
+          insertKeyRidToKeyRidArray<double>(rootLeafNode->keyArray,
+                                         rootLeafNode->ridArray,
+                                         rootLeafNode->len, key_, rid_);
+          rootLeafNode->len += 1;
+        }
         std::cout << "old root leaf node with page id " << rootPageId
                   << " has length " << middleKeyIndex << std::endl;
 
@@ -437,7 +446,15 @@ const void BTreeIndex::insertEntry(const void *key, const RecordId rid) {
         std::cout << "new leaf node with page id " << newPageNum
                   << " has length " << newPageLeafNode->len << std::endl;
 
-        rootLeafNode->len = middleKeyIndex;
+        rootLeafNode->len = 0;
+        for (int i = 0; i < middleKeyIndex; i++) {
+          std::string key_ = ridKeyPairVec[i].key;
+          RecordId rid_ = ridKeyPairVec[i].rid;
+          insertKeyRidToKeyRidArrayForString(rootLeafNode->keyArray,
+                                         rootLeafNode->ridArray,
+                                         rootLeafNode->len, key_, rid_);
+          rootLeafNode->len += 1;
+        }
         std::cout << "old root leaf node with page id " << rootPageId
                   << " has length " << middleKeyIndex << std::endl;
 
@@ -1343,7 +1360,7 @@ const void BTreeIndex::startScan(const void *lowValParm,
       // std::cout<<"&&&&&&&&&&&&&&&&&"<<std::endl;
       outRid = entryRid;
       std::string s(curLeafNode->keyArray[this->nextEntry], 10);
-      std::cout<<s<<" ";
+      // std::cout<<s<<std::endl;
       // Update the nextEntry member
       this->nextEntry += 1;
       if (this->nextEntry < curLeafNode->len) {
