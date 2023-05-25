@@ -521,9 +521,6 @@ class BTreeIndex {
                        const RecordId rid, bool &isSplit, void *splitKey,
                        PageId &splitRightNodePageId);
 
-  // void insertLeaf(PageId pageNum, const void *key, const RecordId rid,
-  //                 bool &isSplit, void *splitKey, PageId &splitRightNodePageId); 
-
   void insertNonLeaf(PageId nodePageNumber, int nextPageIndex, void* middleKey,
                      bool &isSplit, void* splitKey, PageId &splitRightNodePageId) {
     // std::cout << "Non leaf insert case" << std::endl;
@@ -803,7 +800,15 @@ class BTreeIndex {
         }
         std::cout<<"new leaf node with page id "<<newPageNum<<" has length "<<newPageLeafNode->len<<std::endl;
 
-        curLeafNode->len = middleKeyIndex;
+        curLeafNode->len = 0;
+        for (int i = 0; i < middleKeyIndex; i++) {
+          int key_ = ridKeyPairVec[i].key;
+          RecordId rid_ = ridKeyPairVec[i].rid;
+          insertKeyRidToKeyRidArray<int>(curLeafNode->keyArray,
+                                         curLeafNode->ridArray,
+                                         curLeafNode->len, key_, rid_);
+          curLeafNode->len += 1;
+        }
         std::cout<<"cur leaf node with page id "<<pageNum<<" has length "<<curLeafNode->len<<std::endl;
 
         // Set next page id of left leaf node

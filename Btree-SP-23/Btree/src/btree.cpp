@@ -268,7 +268,15 @@ const void BTreeIndex::insertEntry(const void *key, const RecordId rid) {
         std::cout << "new leaf node with page id " << newPageNum
                   << " has length " << newPageLeafNode->len << std::endl;
 
-        rootLeafNode->len = middleKeyIndex;
+        rootLeafNode->len = 0;
+        for (int i = 0; i < middleKeyIndex; i++) {
+          int key_ = ridKeyPairVec[i].key;
+          RecordId rid_ = ridKeyPairVec[i].rid;
+          insertKeyRidToKeyRidArray<int>(rootLeafNode->keyArray,
+                                         rootLeafNode->ridArray,
+                                         rootLeafNode->len, key_, rid_);
+          rootLeafNode->len += 1;
+        }
         std::cout << "old root leaf node with page id " << rootPageId
                   << " has length " << middleKeyIndex << std::endl;
 
