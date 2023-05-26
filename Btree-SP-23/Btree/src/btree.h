@@ -177,6 +177,11 @@ struct IndexMetaInfo {
    * Page number of root page of the B+ Tree inside the file index file.
    */
   PageId rootPageNo;
+
+  /**
+   * Indicates whether the root node is a leaf or not
+  */
+ bool isRootLeaf;
 };
 
 /*
@@ -455,6 +460,9 @@ class BTreeIndex {
    */
   Operator highOp;
 
+  /*
+  * Indicates whether the root node is a leaf or not
+  */
   bool isRootLeaf;
 
   /**

@@ -88,6 +88,7 @@ BTreeIndex::BTreeIndex(const std::string &relationName,
     this->bufMgr->unPinPage(this->file, metaPageId, false);
     // Cast meta page to IndexMetaInfo
     IndexMetaInfo *indexMetaInfo = (IndexMetaInfo *)(metaPage);
+    this->isRootLeaf = indexMetaInfo->isRootLeaf;
     // Set the root page id
     this->rootPageNum = indexMetaInfo->rootPageNo;
     // Values in metapage (relationName, attribute byte offset, attribute type
@@ -118,6 +119,7 @@ BTreeIndex::BTreeIndex(const std::string &relationName,
     this->bufMgr->allocPage(this->file, rootPageNo, rootPage);
     this->rootPageNum = rootPageNo;
     // Write meta data to the meta page
+    indexMetaInfo->isRootLeaf = this->isRootLeaf;
     indexMetaInfo->attrType = attributeType;
     indexMetaInfo->attrByteOffset = attrByteOffset;
     strcpy((char *)(&indexMetaInfo->relationName), relationName.c_str());
@@ -178,7 +180,12 @@ BTreeIndex::BTreeIndex(const std::string &relationName,
 
 BTreeIndex::~BTreeIndex() {
   // Clear up state variables
-  this->isRootLeaf = true;
+  Page* metaPage;
+  this->bufMgr->readPage(this->file, this->headerPageNum, metaPage);
+  IndexMetaInfo *indexMetaInfo = (IndexMetaInfo *)metaPage;
+  indexMetaInfo->rootPageNo = this->rootPageNum;
+  indexMetaInfo->isRootLeaf = this->isRootLeaf;
+  this->bufMgr->unPinPage(this->file, this->headerPageNum, true);
   this->scanExecuting = false;
   try {
     // Unpin the root page
