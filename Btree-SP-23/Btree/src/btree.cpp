@@ -278,7 +278,7 @@ const void BTreeIndex::insertEntry(const void *key, const RecordId rid) {
         LeafNodeInt *newPageLeafNode = (LeafNodeInt *)newPage;
         newPageLeafNode->rightSibPageNo = INVALID_PAGE;
         newPageLeafNode->len = 0;
-        for (int i = middleKeyIndex; i < ridKeyPairVec.size(); i++) {
+        for (int i = middleKeyIndex; i < (int)ridKeyPairVec.size(); i++) {
           int key_ = ridKeyPairVec[i].key;
           RecordId rid_ = ridKeyPairVec[i].rid;
           insertKeyRidToKeyRidArray<int>(newPageLeafNode->keyArray,
@@ -368,7 +368,7 @@ const void BTreeIndex::insertEntry(const void *key, const RecordId rid) {
         LeafNodeDouble *newPageLeafNode = (LeafNodeDouble *)newPage;
         newPageLeafNode->rightSibPageNo = INVALID_PAGE;
         newPageLeafNode->len = 0;
-        for (int i = middleKeyIndex; i < ridKeyPairVec.size(); i++) {
+        for (int i = middleKeyIndex; i < (int)ridKeyPairVec.size(); i++) {
           double key_ = ridKeyPairVec[i].key;
           RecordId rid_ = ridKeyPairVec[i].rid;
           insertKeyRidToKeyRidArray<double>(newPageLeafNode->keyArray,
@@ -457,7 +457,7 @@ const void BTreeIndex::insertEntry(const void *key, const RecordId rid) {
         LeafNodeString *newPageLeafNode = (LeafNodeString *)newPage;
         newPageLeafNode->rightSibPageNo = INVALID_PAGE;
         newPageLeafNode->len = 0;
-        for (int i = middleKeyIndex; i < ridKeyPairVec.size(); i++) {
+        for (int i = middleKeyIndex; i < (int)ridKeyPairVec.size(); i++) {
           std::string key_ = ridKeyPairVec[i].key;
           RecordId rid_ = ridKeyPairVec[i].rid;
           insertKeyRidToKeyRidArrayForString(newPageLeafNode->keyArray,
@@ -689,7 +689,7 @@ void BTreeIndex::insertRecursive(PageId nodePageNumber, const void *key,
       std::string curKey = curNode->keyArray[i];
       std::string nextKey = "";
       if (i == curNode->len - 1) {
-        nextKey = INT_MAX;
+        nextKey = curNode->keyArray[curNode->len - 1] + 'Z'; // last key plus extra character to make it larger than last key
       } else {
         nextKey = curNode->keyArray[i + 1];
       }

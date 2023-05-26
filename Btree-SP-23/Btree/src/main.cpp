@@ -187,14 +187,14 @@ int main(int argc, char **argv) {
 
   File::remove(relationName);
 
-  // test1();
-  // test2();
-  // test3();
-  // errorTests();
-  // test4();
-  // test5();
-  // test7();
-  // test8();
+  test1();
+  test2();
+  test3();
+  errorTests();
+  test4();
+  test5();
+  test7();
+  test8();
   test9();
   return 1;
 }
@@ -365,7 +365,7 @@ void createRelationTest4(int start, int end) {
   Page new_page = file1->allocatePage(new_page_number);
 
   // Insert a bunch of tuples into the relation.
-  for (int i = start; i < end; i++) {
+  for (int i = start; i <= end; i++) {
     sprintf(record1.s, "%05d string record", i);
     record1.i = i;
     record1.d = (double)i;
@@ -656,7 +656,14 @@ void intTestsTest8() {
   BTreeIndex index(relationName, intIndexName, bufMgr, offsetof(tuple, i),
                    INTEGER);
 // run some tests
-  checkPassFail(intScan(&index, -100000, GT, 100000, LT), relationSize)
+  checkPassFail(intScan(&index, 25, GT, 40, LT), 0)
+      checkPassFail(intScan(&index, 20, GTE, 35, LTE), 0)
+          checkPassFail(intScan(&index, -3, GT, 3, LT), 0)
+              checkPassFail(intScan(&index, 996, GT, 1001, LT), 0)
+                  checkPassFail(intScan(&index, 0, GT, 1, LT), 0)
+                      checkPassFail(intScan(&index, 300, GT, 400, LT), 0)
+                          checkPassFail(intScan(&index, 3000, GTE, 4000, LT),
+                                        0)
 }
 
 void intTestsTest9() {
@@ -665,30 +672,6 @@ void intTestsTest9() {
                    INTEGER);
 // run some tests
   checkPassFail(intScan(&index, -100000, GT, 100000, LT), relationSize)
-}
-
-void doubleTestsSparseRelation() {
-  // key - 0, 100, 200, ..., 299900
-  std::cout << "Create a B+ Tree index on the double field" << std::endl;
-  BTreeIndex index(relationName, intIndexName, bufMgr, offsetof(tuple, d),
-                   DOUBLE);
-  std::cout << "Printing to start" << std::endl;
-  // run some tests
-   checkPassFail(doubleScan(&index, 0, GT, 1000, LT), 9)
-      checkPassFail(doubleScan(&index, 10000, GTE, 12000, LTE), 21)
-          checkPassFail(doubleScan(&index, 200000, GT, 299900, LT), 998)
-}
-
-void stringTestsSparseRelation() {
-  // key - 0, 100, 200, ..., 299900
-  std::cout << "Create a B+ Tree index on the string field" << std::endl;
-  BTreeIndex index(relationName, intIndexName, bufMgr, offsetof(tuple, s),
-                   STRING);
-  std::cout << "Printing to start" << std::endl;
-  // run some tests
-   checkPassFail(stringScan(&index, 0, GT, 1000, LT), 9)
-      checkPassFail(stringScan(&index, 0, GTE, 2000, LTE), 21)
-          checkPassFail(stringScan(&index, 0, GT, 10000, LT), 99)
 }
 
 void intTestsTest4() {
@@ -702,46 +685,6 @@ void intTestsTest4() {
   checkPassFail(intScan(&index, 0, GTE, 4999, LTE), 5000)
   checkPassFail(intScan(&index, 0, GT, 4999, LTE), 4999)
   checkPassFail(intScan(&index, 0, GTE, 4999, LT), 4999)
-}
-
-void doubleTestsTest4() {
-  std::cout << "Create a B+ Tree index on the double field" << std::endl;
-  BTreeIndex index(relationName, intIndexName, bufMgr, offsetof(tuple, d),
-                   DOUBLE);
-  std::cout << "Printing to start" << std::endl;
-  // run some tests
-  checkPassFail(doubleScan(&index, 0, GT, 4999, LT), 4998)
-  checkPassFail(doubleScan(&index, 0, GTE, 4999, LTE), 5000)
-  checkPassFail(doubleScan(&index, 0, GT, 4999, LTE), 4999)
-  checkPassFail(doubleScan(&index, 0, GTE, 4999, LT), 4999)
-}
-
-void doubleTestsTest9() {
-  std::cout << "Create a B+ Tree index on the double field" << std::endl;
-  BTreeIndex index(relationName, intIndexName, bufMgr, offsetof(tuple, d),
-                   DOUBLE);
-// run some tests
-  checkPassFail(doubleScan(&index, -100000, GT, 100000, LT), relationSize)
-}
-
-void stringTestsTest4() {
-  std::cout << "Create a B+ Tree index on the string field" << std::endl;
-  BTreeIndex index(relationName, intIndexName, bufMgr, offsetof(tuple, s),
-                   STRING);
-  std::cout << "Printing to start" << std::endl;
-  // run some tests
-  checkPassFail(stringScan(&index, 0, GT, 4999, LT), 4998)
-  checkPassFail(stringScan(&index, 0, GTE, 4999, LTE), 5000)
-  checkPassFail(stringScan(&index, 0, GT, 4999, LTE), 4999)
-  checkPassFail(stringScan(&index, 0, GTE, 4999, LT), 4999)
-}
-
-void stringTestsTest9() {
-  std::cout << "Create a B+ Tree index on the string field" << std::endl;
-  BTreeIndex index(relationName, intIndexName, bufMgr, offsetof(tuple, s),
-                   STRING);
-// run some tests
-  checkPassFail(stringScan(&index, -100000, GT, 100000, LT), relationSize)
 }
 
 int intScan(BTreeIndex *index, int lowVal, Operator lowOp, int highVal,
@@ -838,6 +781,39 @@ void doubleTestsTest8() {
                                         0)
 }
 
+void doubleTestsSparseRelation() {
+  // key - 0, 100, 200, ..., 299900
+  std::cout << "Create a B+ Tree index on the double field" << std::endl;
+  BTreeIndex index(relationName, intIndexName, bufMgr, offsetof(tuple, d),
+                   DOUBLE);
+  std::cout << "Printing to start" << std::endl;
+  // run some tests
+   checkPassFail(doubleScan(&index, 0, GT, 1000, LT), 9)
+      checkPassFail(doubleScan(&index, 10000, GTE, 12000, LTE), 21)
+          checkPassFail(doubleScan(&index, 200000, GT, 299900, LT), 998)
+}
+
+void doubleTestsTest4() {
+  std::cout << "Create a B+ Tree index on the double field" << std::endl;
+  BTreeIndex index(relationName, intIndexName, bufMgr, offsetof(tuple, d),
+                   DOUBLE);
+  std::cout << "Printing to start" << std::endl;
+  // run some tests
+  checkPassFail(doubleScan(&index, 0, GT, 4999, LT), 4998)
+  checkPassFail(doubleScan(&index, 0, GTE, 4999, LTE), 5000)
+  checkPassFail(doubleScan(&index, 0, GT, 4999, LTE), 4999)
+  checkPassFail(doubleScan(&index, 0, GTE, 4999, LT), 4999)
+}
+
+void doubleTestsTest9() {
+  std::cout << "Create a B+ Tree index on the double field" << std::endl;
+  BTreeIndex index(relationName, intIndexName, bufMgr, offsetof(tuple, d),
+                   DOUBLE);
+// run some tests
+  checkPassFail(doubleScan(&index, -100000, GT, 100000, LT), relationSize)
+}
+
+
 int doubleScan(BTreeIndex *index, double lowVal, Operator lowOp, double highVal,
                Operator highOp) {
   RecordId scanRid;
@@ -908,14 +884,14 @@ void stringTests() {
                    STRING);
 
   // run some tests
-  checkPassFail(stringScan(&index, 25, GT, 40, LT), 0)
-      checkPassFail(stringScan(&index, 20, GTE, 35, LTE), 0)
-          checkPassFail(stringScan(&index, -3, GT, 3, LT), 0)
-              checkPassFail(stringScan(&index, 996, GT, 1001, LT), 0)
+  checkPassFail(stringScan(&index, 25, GT, 40, LT), 14)
+      checkPassFail(stringScan(&index, 20, GTE, 35, LTE), 16)
+          checkPassFail(stringScan(&index, -3, GT, 3, LT), 3)
+              checkPassFail(stringScan(&index, 996, GT, 1001, LT), 4)
                   checkPassFail(stringScan(&index, 0, GT, 1, LT), 0)
-                      checkPassFail(stringScan(&index, 300, GT, 400, LT), 0)
+                      checkPassFail(stringScan(&index, 300, GT, 400, LT), 99)
                           checkPassFail(stringScan(&index, 3000, GTE, 4000, LT),
-                                        0)
+                                        1000)
 }
 
 void stringTestsTest8() {
@@ -932,6 +908,38 @@ void stringTestsTest8() {
                       checkPassFail(stringScan(&index, 300, GT, 400, LT), 0)
                           checkPassFail(stringScan(&index, 3000, GTE, 4000, LT),
                                         0)
+}
+
+void stringTestsSparseRelation() {
+  // key - 0, 100, 200, ..., 299900
+  std::cout << "Create a B+ Tree index on the string field" << std::endl;
+  BTreeIndex index(relationName, intIndexName, bufMgr, offsetof(tuple, s),
+                   STRING);
+  std::cout << "Printing to start" << std::endl;
+  // run some tests
+   checkPassFail(stringScan(&index, 0, GT, 1000, LT), 9)
+      checkPassFail(stringScan(&index, 0, GTE, 2000, LTE), 21)
+          checkPassFail(stringScan(&index, 0, GT, 10000, LT), 99)
+}
+
+void stringTestsTest4() {
+  std::cout << "Create a B+ Tree index on the string field" << std::endl;
+  BTreeIndex index(relationName, intIndexName, bufMgr, offsetof(tuple, s),
+                   STRING);
+  std::cout << "Printing to start" << std::endl;
+  // run some tests
+  checkPassFail(stringScan(&index, 0, GT, 4999, LT), 4998)
+  checkPassFail(stringScan(&index, 0, GTE, 4999, LTE), 5000)
+  checkPassFail(stringScan(&index, 0, GT, 4999, LTE), 4999)
+  checkPassFail(stringScan(&index, 0, GTE, 4999, LT), 4999)
+}
+
+void stringTestsTest9() {
+  std::cout << "Create a B+ Tree index on the string field" << std::endl;
+  BTreeIndex index(relationName, intIndexName, bufMgr, offsetof(tuple, s),
+                   STRING);
+// run some tests
+  checkPassFail(stringScan(&index, -100000, GT, 100000, LT), relationSize)
 }
 
 int stringScan(BTreeIndex *index, int lowVal, Operator lowOp, int highVal,

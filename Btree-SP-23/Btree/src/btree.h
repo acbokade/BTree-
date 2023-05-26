@@ -26,7 +26,7 @@ namespace badgerdb {
 
 const int IDEAL_OCCUPANCY = 1;
 const int INVALID_KEY = INT_MIN;
-const int INVALID_PAGE = INT_MIN;
+const PageId INVALID_PAGE = PageId(INT_MIN);
 const int INVALID_KEY_INDEX = INT_MIN;
 
 /**
@@ -827,7 +827,7 @@ class BTreeIndex {
         // Cast the page to leaf node
         LeafNodeInt *newPageLeafNode = (LeafNodeInt *)newPage;
         newPageLeafNode->len = 0;
-        for (int i = middleKeyIndex; i < ridKeyPairVec.size(); i++) {
+        for (int i = middleKeyIndex; i < (int)ridKeyPairVec.size(); i++) {
           int key_ = ridKeyPairVec[i].key;
           RecordId rid_ = ridKeyPairVec[i].rid;
           insertKeyRidToKeyRidArray<int>(newPageLeafNode->keyArray,
@@ -903,7 +903,7 @@ class BTreeIndex {
         // Cast the page to leaf node
         LeafNodeDouble *newPageLeafNode = (LeafNodeDouble *)newPage;
         newPageLeafNode->len = 0;
-        for (int i = middleKeyIndex; i < ridKeyPairVec.size(); i++) {
+        for (int i = middleKeyIndex; i < (int)ridKeyPairVec.size(); i++) {
           double key_ = ridKeyPairVec[i].key;
           RecordId rid_ = ridKeyPairVec[i].rid;
           insertKeyRidToKeyRidArray<double>(newPageLeafNode->keyArray,
@@ -979,7 +979,7 @@ class BTreeIndex {
         // Cast the page to leaf node
         LeafNodeString *newPageLeafNode = (LeafNodeString *)newPage;
         newPageLeafNode->len = 0;
-        for (int i = middleKeyIndex; i < ridKeyPairVec.size(); i++) {
+        for (int i = middleKeyIndex; i < (int)ridKeyPairVec.size(); i++) {
           std::string key_ = ridKeyPairVec[i].key;
           RecordId rid_ = ridKeyPairVec[i].rid;
           insertKeyRidToKeyRidArrayForString(newPageLeafNode->keyArray,
