@@ -85,6 +85,7 @@ BTreeIndex::BTreeIndex(const std::string &relationName,
 
   try {
     this->file = new BlobFile(outIndexName, false);
+    std::cout<<"Index already exists"<<std::endl;
     PageId metaPageId = this->headerPageNum;
     Page *metaPage;
     // Read the meta page
@@ -689,7 +690,7 @@ void BTreeIndex::insertRecursive(PageId nodePageNumber, const void *key,
       std::string curKey = curNode->keyArray[i];
       std::string nextKey = "";
       if (i == curNode->len - 1) {
-        nextKey = curNode->keyArray[curNode->len - 1] + 'Z'; // last key plus extra character to make it larger than last key
+        nextKey = INT_MAX; // last key plus extra character to make it larger than last key
       } else {
         nextKey = curNode->keyArray[i + 1];
       }
@@ -700,7 +701,7 @@ void BTreeIndex::insertRecursive(PageId nodePageNumber, const void *key,
         foundKey = true;
         break;
       } else {
-        if (keyCopy >= curKey && keyCopy < nextKey) {
+        if ((i == curNode->len - 1 && keyCopy >= curKey) || (keyCopy >= curKey && keyCopy < nextKey)) {
           nextPageIndex = i + 1;
           nextPage = curNode->pageNoArray[i + 1];
           foundKey = true;
