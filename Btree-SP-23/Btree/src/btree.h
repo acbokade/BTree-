@@ -525,10 +525,29 @@ class BTreeIndex {
    **/
   const void insertEntry(const void *key, const RecordId rid);
 
+  /**
+   * Insert a new entry using the pair <value,rid> recursively.
+   * Start from root to recursively find out the leaf to insert the entry in.
+   * @param nodePageNumber page number of the node which contains the key
+   * @param key key to be inserted
+   * @param rid rid to be inserted
+   * @param isSplit reference indicating whether split happened at the next level or not
+   * @param splitKey splitKey which needs to be inserted at current node due to split at next level
+   * @param splitRightNodePageId page number of new right children node created due to split
+   **/
  void insertRecursive(PageId nodePageNumber, const void *key,
                        const RecordId rid, bool &isSplit, void *splitKey,
                        PageId &splitRightNodePageId);
 
+   /**
+   * Insert a new entry using the pair <key, pageId> in the non leaf node.
+   * @param nodePageNumber page number of the node where the middleKey needs to be inserted
+   * @param nextPageIndex index of the page in the pageNoArray where the page id of the next node was found while inserting recursively
+   * @param middleKey key which needs to be inserted
+   * @param isSplit reference indicating whether split happened at the next level or not (passed by reference from insertRecursive)
+   * @param splitKey splitKey which needs to be set by current node due to split at current level (passed by pointer from insertRecursive)
+   * @param splitRightNodePageId page number of new right children node created due to split at current level (passed by reference from insertRecursive)
+   **/
   void insertNonLeaf(PageId nodePageNumber, int nextPageIndex, void* middleKey,
                      bool &isSplit, void* splitKey, PageId &splitRightNodePageId) {
     // std::cout << "Non leaf insert case" << std::endl;
@@ -749,6 +768,16 @@ class BTreeIndex {
     }
   }
 
+   /**
+   * Insert a new entry using the pair <value,rid> recursively in the leaf node.
+   * Start from root to recursively find out the leaf to insert the entry in.
+   * @param pageNum page number of the node which contains the key
+   * @param key key to be inserted
+   * @param rid rid to be inserted
+   * @param isSplit reference indicating whether split happened at the next level or not(passed by reference from insertRecursive)
+   * @param splitKey splitKey which needs to be inserted at current node due to split at next level (passed by pointer from insertRecursive)
+   * @param splitRightNodePageId page number of new right children node created due to split (passed by reference from insertRecursive)
+   **/
   void insertLeaf(PageId pageNum, void* key, const RecordId rid,
                   bool &isSplit, void* splitKey, PageId &splitRightNodePageId) {
     // std::cout << "Inserting leaf case" << std::endl;
@@ -987,6 +1016,15 @@ class BTreeIndex {
   }
   }
 
+  /**
+   * Inserts the key (of int, double type) and the record id at the appropriate location to keep the keys sorted
+   * Called by leaf nodes to insert the key and the record id
+   * @param keyArray current keyArray of the node
+   * @param ridArray current ridArray of the node
+   * @param len current length of the node
+   * @param key key to be inserted
+   * @param rid recordId to be inserted
+   **/
   template <class T>
   void insertKeyRidToKeyRidArray(T keyArray[], RecordId ridArray[], int len,
                                  T key, const RecordId rid) {
@@ -997,7 +1035,7 @@ class BTreeIndex {
     }
     bool foundKeyIndex = false;
     int keyIndex =
-        -1;  // keyIndex is the index just before which to insert the given key
+        -1;  // keyIndex is the index just before the given key needs to be inserted
     for (int i = 0; i < len; i++) {
       if (keyArray[i] >= key) {
         keyIndex = i;
@@ -1026,6 +1064,15 @@ class BTreeIndex {
     }
   }
 
+  /**
+   * Inserts the key (of string type) and the record id at the appropriate location to keep the keys sorted
+   * Called by leaf nodes to insert the key and the record id
+   * @param keyArray current keyArray of the node
+   * @param ridArray current ridArray of the node
+   * @param len current length of the node
+   * @param key key to be inserted
+   * @param rid recordId to be inserted
+   **/
   void insertKeyRidToKeyRidArrayForString(char keyArray[][10], RecordId ridArray[], int len,
                                  std::string key, const RecordId rid) {
     if (len == 0) {
@@ -1035,7 +1082,7 @@ class BTreeIndex {
     }
     bool foundKeyIndex = false;
     int keyIndex =
-        -1;  // keyIndex is the index just before which to insert the given key
+        -1;  // keyIndex is the index just before the given key needs to be inserted
     for (int i = 0; i < len; i++) {
       if (strncmp(keyArray[i], key.c_str(), STRINGSIZE) >= 0) {
         keyIndex = i;
@@ -1064,22 +1111,39 @@ class BTreeIndex {
     }
   }
 
+  /**
+   * Checks whether the leaf node has space for a key to be inserted or not
+   * @param leafNode current keyArray of the node
+   **/
   template <typename T>
   bool hasSpaceInLeafNode(T *leafNode) {
     return leafNode->len < IDEAL_OCCUPANCY * this->leafOccupancy;
   }
 
+  /**
+   * Checks whether the node leaf node has space for a key to be inserted or not
+   * @param leafNode current keyArray of the node
+   **/
   template <typename T>
   bool hasSpaceInNonLeafNode(T *nonLeafNode) {
     return nonLeafNode->len < IDEAL_OCCUPANCY * this->nodeOccupancy;
   }
 
+  /**
+   * Inserts the key (of int, double type) and the page at the appropriate location to keep the keys sorted
+   * Called by non leaf nodes to insert the key and the page number
+   * @param keyArray current keyArray of the node
+   * @param pageNoArray current pageNoArray of the node
+   * @param len current length of the node
+   * @param key key to be inserted
+   * @param pageNo page number to be inserted
+   **/
   template <class T>
   void insertKeyPageIdToKeyPageIdArray(T keyArray[], PageId pageNoArray[],
                                        int len, T key, PageId pageNo) {
     bool foundKeyIndex = false;
     int keyIndex =
-        -1;  // keyIndex is the index just before which to insert the given key
+        -1;  // keyIndex is the index just before which the given key needs to be inserted
     for (int i = 0; i < len; i++) {
       if (keyArray[i] >= key) {
         keyIndex = i;
@@ -1109,11 +1173,20 @@ class BTreeIndex {
     }
   }
 
+  /**
+   * Inserts the key (of string type) and the page at the appropriate location to keep the keys sorted
+   * Called by non leaf nodes to insert the key and the page number
+   * @param keyArray current keyArray of the node
+   * @param pageNoArray current pageNoArray of the node
+   * @param len current length of the node
+   * @param key key to be inserted
+   * @param pageNo page number to be inserted
+   **/
   void insertKeyPageIdToKeyPageIdArrayForString(char keyArray[][10], PageId pageNoArray[],
                                        int len, std::string key, PageId pageNo) {
     bool foundKeyIndex = false;
     int keyIndex =
-        -1;  // keyIndex is the index just before which to insert the given key
+        -1;  // keyIndex is the index just before which the given key needs to be inserted
     for (int i = 0; i < len; i++) {
       if (strncmp(keyArray[i], key.c_str(), STRINGSIZE) >= 0) {
         keyIndex = i;
@@ -1142,8 +1215,6 @@ class BTreeIndex {
       pageNoArray[len + 1] = pageNo;
     }
   }
-
-  void printBTree();
 
   /**
    * Begin a filtered scan of the index.  For instance, if the method is called
