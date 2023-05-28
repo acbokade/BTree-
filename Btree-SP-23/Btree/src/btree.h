@@ -24,7 +24,7 @@
 
 namespace badgerdb {
 
-const int IDEAL_OCCUPANCY = 1;
+const double IDEAL_OCCUPANCY = 1;
 const int INVALID_KEY = INT_MIN;
 const PageId INVALID_PAGE = PageId(INT_MIN);
 const int INVALID_KEY_INDEX = INT_MIN;
@@ -555,7 +555,7 @@ class BTreeIndex {
     Page *curPage;
     this->bufMgr->readPage(this->file, nodePageNumber, curPage);
     if (this->attributeType == Datatype::INTEGER) {
-          // Cast to non leaf node
+      // Cast to non leaf node
       NonLeafNodeInt *curNonLeafNode = (NonLeafNodeInt *)curPage;
       // Check if space exists
       if (hasSpaceInNonLeafNode(curNonLeafNode)) {
@@ -584,6 +584,11 @@ class BTreeIndex {
         tempPageNoArray[nextPageIndex + 1] = splitRightNodePageId;
         // Insert middleKey at nextPageIndex
         tempKeyArray[nextPageIndex] = *(int*)middleKey;
+        for (int i = 0; i < nextPageIndex; i++) {
+          tempKeyArray[i] = curNonLeafNode->keyArray[i];
+          tempPageNoArray[i] = curNonLeafNode->pageNoArray[i];
+        }
+        tempPageNoArray[nextPageIndex] = curNonLeafNode->pageNoArray[nextPageIndex];
 
         // Create new page for the split
         Page *newPage;
@@ -600,8 +605,8 @@ class BTreeIndex {
         // node
         for (int i = 0; i < splitKeyIndex; i++) {
           curNonLeafNode->keyArray[i] = tempKeyArray[i];
+          curNonLeafNode->pageNoArray[i] = tempPageNoArray[i];
         }
-        curNonLeafNode->len = splitKeyIndex;
         std::cout<<"cur non leaf node with page id "<<nodePageNumber<<" has length "<<curNonLeafNode->len<<std::endl;
 
         curNonLeafNode->pageNoArray[splitKeyIndex] = splitRightNodePageId;
@@ -617,7 +622,7 @@ class BTreeIndex {
 
         newNonLeafNodeInt->pageNoArray[curNonLeafNode->len - splitKeyIndex] =
             tempPageNoArray[curNonLeafNode->len + 1];
-
+        curNonLeafNode->len = splitKeyIndex;
         // Set the splitKey and splitRightNodePageId
         *static_cast<int*>(splitKey) = newSplitKey;
         splitRightNodePageId = newPageNum;
@@ -654,6 +659,11 @@ class BTreeIndex {
         tempPageNoArray[nextPageIndex + 1] = splitRightNodePageId;
         // Insert middleKey at nextPageIndex
         tempKeyArray[nextPageIndex] = *(double*)middleKey;
+        for (int i = 0; i < nextPageIndex; i++) {
+          tempKeyArray[i] = curNonLeafNode->keyArray[i];
+          tempPageNoArray[i] = curNonLeafNode->pageNoArray[i];
+        }
+        tempPageNoArray[nextPageIndex] = curNonLeafNode->pageNoArray[nextPageIndex];
 
         // Create new page for the split
         Page *newPage;
@@ -670,8 +680,8 @@ class BTreeIndex {
         // node
         for (int i = 0; i < splitKeyIndex; i++) {
           curNonLeafNode->keyArray[i] = tempKeyArray[i];
+          curNonLeafNode->pageNoArray[i] = tempPageNoArray[i];
         }
-        curNonLeafNode->len = splitKeyIndex;
         std::cout<<"cur non leaf node with page id "<<nodePageNumber<<" has length "<<curNonLeafNode->len<<std::endl;
 
         curNonLeafNode->pageNoArray[splitKeyIndex] = splitRightNodePageId;
@@ -687,7 +697,7 @@ class BTreeIndex {
 
         newNonLeafNodeInt->pageNoArray[curNonLeafNode->len - splitKeyIndex] =
             tempPageNoArray[curNonLeafNode->len + 1];
-
+        curNonLeafNode->len = splitKeyIndex;
         // Set the splitKey and splitRightNodePageId
         *static_cast<double*>(splitKey) = newSplitKey;
         splitRightNodePageId = newPageNum;
@@ -724,6 +734,11 @@ class BTreeIndex {
         tempPageNoArray[nextPageIndex + 1] = splitRightNodePageId;
         // Insert middleKey at nextPageIndex
         tempKeyArray[nextPageIndex] = *(std::string*)middleKey;
+        for (int i = 0; i < nextPageIndex; i++) {
+          tempKeyArray[i] = curNonLeafNode->keyArray[i];
+          tempPageNoArray[i] = curNonLeafNode->pageNoArray[i];
+        }
+        tempPageNoArray[nextPageIndex] = curNonLeafNode->pageNoArray[nextPageIndex];
 
         // Create new page for the split
         Page *newPage;
@@ -740,8 +755,8 @@ class BTreeIndex {
         // node
         for (int i = 0; i < splitKeyIndex; i++) {
           strncpy(curNonLeafNode->keyArray[i], tempKeyArray[i].c_str(), STRINGSIZE);
+          curNonLeafNode->pageNoArray[i] = tempPageNoArray[i];
         }
-        curNonLeafNode->len = splitKeyIndex;
         std::cout<<"cur non leaf node with page id "<<nodePageNumber<<" has length "<<curNonLeafNode->len<<std::endl;
 
         curNonLeafNode->pageNoArray[splitKeyIndex] = splitRightNodePageId;
@@ -758,6 +773,7 @@ class BTreeIndex {
         newNonLeafNodeString->pageNoArray[curNonLeafNode->len - splitKeyIndex] =
             tempPageNoArray[curNonLeafNode->len + 1];
 
+        curNonLeafNode->len = splitKeyIndex;
         // Set the splitKey and splitRightNodePageId
         *static_cast<std::string*>(splitKey) = newSplitKey;
         splitRightNodePageId = newPageNum;

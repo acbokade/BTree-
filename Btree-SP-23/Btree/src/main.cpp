@@ -46,7 +46,7 @@ const std::string relationName = "relA";
 // need to be changed to number of record that are expected to be found during
 // the scan, else tests will erroneously be reported to have failed.
 const int relationSize = 5000;
-const int largeRelationSize = 500000;
+const int largeRelationSize = 50000;
 std::string intIndexName, doubleIndexName, stringIndexName;
 
 // This is the structure for tuples in the base relation

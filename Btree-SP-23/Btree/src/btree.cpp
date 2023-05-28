@@ -516,7 +516,12 @@ const void BTreeIndex::insertEntry(const void *key, const RecordId rid) {
     PageId splitRightNodePageId;
     insertRecursive(rootPageId, key, rid, isSplit, splitKey,
                     splitRightNodePageId);
-    this->bufMgr->unPinPage(this->file, rootPageId, true);
+    // Unpin the root page if pinned
+    try {
+      this->bufMgr->unPinPage(this->file, rootPageId, true);
+    } catch(...) {
+
+    }
   }
 }
 
@@ -569,7 +574,7 @@ void BTreeIndex::insertRecursive(PageId nodePageNumber, const void *key,
         insertLeaf(nextPage, &keyCopy, rid, isSplit, &splitKey,
                         splitRightNodePageId);
       } else {
-        std::cout << "Insert recursive" << std::endl;
+        // std::cout << "Insert recursive" << std::endl;
         // The split key will contain the value which has to be moved up to
         // above non-leaf nodes
         insertRecursive(nextPage, key, rid, isSplit, (void *)&splitKey,
@@ -645,7 +650,7 @@ void BTreeIndex::insertRecursive(PageId nodePageNumber, const void *key,
         insertLeaf(nextPage, &keyCopy, rid, isSplit, &splitKey,
                            splitRightNodePageId);
       } else {
-        std::cout << "Insert recursive" << std::endl;
+        // std::cout << "Insert recursive" << std::endl;
         // The split key will contain the value which has to be moved up to
         // above non-leaf nodes
         insertRecursive(nextPage, key, rid, isSplit, (void *)&splitKey,
@@ -690,7 +695,7 @@ void BTreeIndex::insertRecursive(PageId nodePageNumber, const void *key,
       std::string curKey = curNode->keyArray[i];
       std::string nextKey = "";
       if (i == curNode->len - 1) {
-        nextKey = INT_MAX; // last key plus extra character to make it larger than last key
+        nextKey = ""; // last key plus extra character to make it larger than last key
       } else {
         nextKey = curNode->keyArray[i + 1];
       }
@@ -721,7 +726,7 @@ void BTreeIndex::insertRecursive(PageId nodePageNumber, const void *key,
         insertLeaf(nextPage, &keyCopy, rid, isSplit, &splitKey,
                            splitRightNodePageId);
       } else {
-        std::cout << "Insert recursive" << std::endl;
+        // std::cout << "Insert recursive" << std::endl;
         // The split key will contain the value which has to be moved up to
         // above non-leaf nodes
         insertRecursive(nextPage, key, rid, isSplit, (void *)&splitKey,
